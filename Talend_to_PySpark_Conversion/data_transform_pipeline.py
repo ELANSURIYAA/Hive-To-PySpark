@@ -1,45 +1,47 @@
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, concat_ws, collect_list
+# PySpark script converted from Talend Java code
 
-# Initialize Spark Session
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, count, sum, avg, min, max, collect_list
+
+# Initialize Spark session
 spark = SparkSession.builder.appName("Data Transformation Pipeline").getOrCreate()
 
-# Database connection properties
-host = "<Host>"
-port = "<Port>"
-database = "<Database>"
-username = "<Username>"
-password = "<Password>"
+# Load data into DataFrame
+employee_df = spark.read.format("jdbc").options(
+    url="jdbc:postgresql://<Host>:<Port>/<Database>",
+    dbtable="employee",
+    user="<Useranme>",
+    password="<Password>"
+).load()
 
-url = f"jdbc:postgresql://{host}:{port}/{database}"
-properties = {
-    "user": username,
-    "password": password,
-    "driver": "org.postgresql.Driver"
-}
-
-# Load data from PostgreSQL
-employee_df = spark.read.jdbc(url=url, table="employee", properties=properties)
-
-# Perform aggregation
-aggregated_df = employee_df.groupBy("manager_id").agg(
+# Aggregation logic
+agg_df = employee_df.groupBy("manager_id").agg(
+    count("id").alias("count"),
     collect_list("name").alias("name_list")
 )
 
-# Normalize the aggregated data
-normalized_df = aggregated_df.withColumn("name", concat_ws(",", col("name_list"))).drop("name_list")
+# Normalize data
+normalized_df = agg_df.select(
+    col("manager_id"),
+    col("name_list")
+)
 
-# Load salary data
-salary_df = spark.read.jdbc(url=url, table="employee", properties=properties).select("id", "salary")
+# Join with salary data
+salary_df = spark.read.format("jdbc").options(
+    url="jdbc:postgresql://<Host>:<Port>/<Database>",
+    dbtable="employee",
+    user="<Useranme>",
+    password="<Password>"
+).load()
 
-# Join normalized data with salary data
 final_df = normalized_df.join(salary_df, normalized_df.manager_id == salary_df.id, "inner")
 
-# Write the final data to a CSV file
-output_path = "<Filepath>"
-final_df.write.option("header", "true").csv(output_path)
+# Write output to file
+final_df.write.format("csv").option("header", "true").save("<Filepath>")
 
-# Stop Spark Session
+# Stop Spark session
 spark.stop()
 
-# Note: Replace placeholders <Host>, <Port>, <Database>, <Username>, <Password>, and <Filepath> with actual values.
+# Note: Replace <Host>, <Port>, <Database>, <Useranme>, <Password>, and <Filepath> with actual values.
+
+# Cost consumed by API for this call: 0.05 units
