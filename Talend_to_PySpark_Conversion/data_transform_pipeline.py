@@ -1,48 +1,59 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, collect_list
+from pyspark.sql.functions import col, concat_ws, lit
 
 # Initialize Spark Session
 spark = SparkSession.builder \
-    .appName("Talend to PySpark Conversion") \
-    .config("spark.executor.memory", "2g") \
-    .config("spark.driver.memory", "1g") \
+    .appName("Data Transformation Pipeline") \
     .getOrCreate()
 
-try:
-    # Load data into DataFrame
-    employee_df = spark.read.format("jdbc") \
-        .option("url", "jdbc:postgresql://<Host>:<Port>/<Database>") \
-        .option("dbtable", "employee") \
-        .option("user", "<Username>") \
-        .option("password", "<Password>") \
-        .load()
+# Database connection details
+host = "<Host>"
+port = "<Port>"
+database = "<Database>"
+username = "<Username>"
+password = "<Password>"
 
-    # Perform transformations
-    agg_df = employee_df.groupBy("Manager_id").agg(
-        collect_list("Name").alias("Name_list")
-    )
+# JDBC URL
+jdbc_url = f"jdbc:postgresql://{host}:{port}/{database}"
 
-    # Normalize Name_list
-    normalized_df = agg_df.withColumn("Name", col("Name_list").cast("string"))  # Consider joining list elements into a string
+# Read data from the database
+employee_df = spark.read.format("jdbc") \
+    .option("url", jdbc_url) \
+    .option("dbtable", "employee") \
+    .option("user", username) \
+    .option("password", password) \
+    .load()
 
-    # Load salary data (assuming salary is a separate table)
-    salary_df = spark.read.format("jdbc") \
-        .option("url", "jdbc:postgresql://<Host>:<Port>/<Database>") \
-        .option("dbtable", "salary") \
-        .option("user", "<Username>") \
-        .option("password", "<Password>") \
-        .load()
+# Perform aggregation
+aggregated_df = employee_df.groupBy("manager_id") \
+    .agg(concat_ws(",", col("name")).alias("name_list"))
 
-    # Join DataFrames
-    final_df = normalized_df.join(salary_df, normalized_df.Manager_id == salary_df.Id, "inner") \
-        .select(normalized_df.Manager_id, normalized_df.Name, salary_df.Salary)
+# Normalize the data
+normalized_df = aggregated_df.withColumn("name", col("name_list")) \
+    .drop("name_list")
 
-    # Write final DataFrame to file
-    final_df.write.csv("<Filepath>", header=True, mode="overwrite")
+# Read salary data
+salary_df = spark.read.format("jdbc") \
+    .option("url", jdbc_url) \
+    .option("dbtable", "employee") \
+    .option("user", username) \
+    .option("password", password) \
+    .load()
 
-except Exception as e:
-    print(f"Error occurred: {e}")
+# Perform join operation
+final_df = normalized_df.join(salary_df, normalized_df.manager_id == salary_df.id, "inner") \
+    .select(normalized_df.manager_id.alias("Id"),
+            normalized_df.name.alias("Name"),
+            col("employee").alias("Employee"),
+            col("manager_id").alias("Manager_id"),
+            col("salary").alias("Salary"))
 
-finally:
-    # Stop Spark Session
-    spark.stop()
+# Write the final output to a CSV file
+output_path = "<Filepath>"
+final_df.write.format("csv") \
+    .option("header", "true") \
+    .option("delimiter", ";") \
+    .save(output_path)
+
+# Stop Spark Session
+spark.stop()
