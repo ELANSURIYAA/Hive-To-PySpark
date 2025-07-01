@@ -1,65 +1,54 @@
-import os
-import sys
-import logging
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, concat_ws, collect_list, explode, split
+from pyspark.sql.functions import col, concat_ws, collect_list
 
-# Configure logging
-logging.basicConfig(level=logging.ERROR)
-logger = logging.getLogger(__name__)
+# Initialize Spark Session
+spark = SparkSession.builder.appName("Data Transformation Pipeline").getOrCreate()
 
-try:
-    # Initialize SparkSession
-    spark = SparkSession.builder \
-        .appName("Employee Data Processing") \
-        .getOrCreate()
+# Database connection properties
+host = "<Host>"
+port = "<Port>"
+database = "<Database>"
+username = "<Username>"
+password = "<Password>"
 
-    # Database connection details
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5432")
-    database = os.getenv("DB_NAME", "my_database")
-    jdbc_url = f"jdbc:postgresql://{host}:{port}/{database}"
+# JDBC URL
+jdbc_url = f"jdbc:postgresql://{host}:{port}/{database}"
 
-    # Load employee data
-    employee_df = spark.read.format("jdbc") \
-        .option("url", jdbc_url) \
-        .option("dbtable", "employee_table") \
-        .option("user", "username") \
-        .option("password", "password") \
-        .load()
+# Load data from the database
+employee_df = spark.read.format("jdbc").options(
+    url=jdbc_url,
+    driver="org.postgresql.Driver",
+    dbtable="employee",
+    user=username,
+    password=password
+).load()
 
-    # Validate required columns
-    required_columns = {"Manager_id", "Name", "Id", "Salary"}
-    if not required_columns.issubset(employee_df.columns):
-        raise ValueError(f"Missing required columns: {required_columns - set(employee_df.columns)}")
+# Perform aggregation
+aggregated_df = employee_df.groupBy("manager_id").agg(
+    collect_list("name").alias("name_list")
+)
 
-    # Aggregation: Group by Manager_id and concatenate Name values
-    aggregated_df = employee_df.groupBy("Manager_id") \
-        .agg(concat_ws(",", collect_list("Name")).alias("Name_list"))
+# Normalize the aggregated data
+normalized_df = aggregated_df.select(
+    col("manager_id"),
+    concat_ws(",", col("name_list")).alias("normalized_names")
+)
 
-    # Normalize: Split Name_list into individual rows
-    normalized_df = aggregated_df.select(
-        col("Manager_id"),
-        explode(split(col("Name_list"), ",")).alias("Name")
-    )
+# Load salary data
+salary_df = spark.read.format("jdbc").options(
+    url=jdbc_url,
+    driver="org.postgresql.Driver",
+    dbtable="employee",
+    user=username,
+    password=password
+).load().select("id", "salary")
 
-    # Select salary data
-    salary_df = employee_df.select("Id", "Salary")
+# Join normalized data with salary data
+final_df = normalized_df.join(salary_df, normalized_df.manager_id == salary_df.id, "inner")
 
-    # Join employee data with salary data
-    joined_df = normalized_df.join(salary_df, normalized_df.Manager_id == salary_df.Id, "inner") \
-        .select(normalized_df.Manager_id, normalized_df.Name, salary_df.Salary)
+# Write the final output to a CSV file
+output_path = "<Filepath>"
+final_df.write.format("csv").option("header", "true").save(output_path)
 
-    # Write the final output to a CSV file
-    output_path = sys.argv[1] if len(sys.argv) > 1 else "output_file_path.csv"
-    joined_df.write.format("csv") \
-        .option("header", "true") \
-        .option("delimiter", ";") \
-        .save(output_path)
-
-except Exception as e:
-    logger.error(f"Error occurred: {e}")
-
-finally:
-    # Stop Spark session
-    spark.stop()
+# Stop Spark Session
+spark.stop()
