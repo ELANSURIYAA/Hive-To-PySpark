@@ -1,1 +1,0 @@
-print('PySpark script placeholder')
