@@ -1,15 +1,21 @@
-### Notes:
-- **input_SET_DEFAULT_KEYS** is the mapplet input and provides three fields: `PARENT_DIM_CK` (decimal, 38), `NATURAL_KEY_NULL_IND` (string, 1), and `NULL_ALLOWED_IND` (string, 1). These are indicators and keys for downstream logic.
-- **exp_PARENT_KEY_ASSIGNMENT** is an Expression transformation that:
-    - Validates that `NATURAL_KEY_NULL_IND` and `NULL_ALLOWED_IND` are either 'Y' or 'N'.
-    - Assigns the output `PARENT_DIM_CK` based on the presence of a parent key and the indicator values, mapping to -1, -2, or -3 for default dimension records.
-    - Uses variables `v_NATURAL_KEY_NULL_IND` and `v_NULL_ALLOWED_IND` for intermediate logic.
-- **output_SET_DEFAULT_KEYS** is the mapplet output, passing through the calculated `PARENT_DIM_CK`.
-- **Connections:**
-    - Data flows from `input_SET_DEFAULT_KEYS` to `exp_PARENT_KEY_ASSIGNMENT`, then to `output_SET_DEFAULT_KEYS`.
-- **N/A fields:**
-    - Where a component does not have input or output ports, or expressions, 'N/A' is used as per instructions.
-- **Advanced Properties:**
-    - All components are marked as Optional (true).
-    - The Expression transformation has Tracing Level set to Normal.
-- **No unsupported or missing properties** were found in this mapping. All required metadata is present.
+| Component Name | Component Type | Input Ports | Output Ports | Expressions/Logic | Dependencies/Connections | Additional Properties |
+|----------------|---------------|------------|-------------|-------------------|--------------------------|-----------------------|
+| exp_TRIM_DATA (continued) | Transformation | All output ports from sq_MEMBER | ... | See detailed logic in JSON (e.g., trimming, null checks, business rules for each output port) | sq_MEMBER | Tracing Level: Normal, Optional: true |
+| lkp_DIM_HEALTH_STATUS | Lookup | o_HEALTH_STAT, PLAN_DIM_CK1 | HEALTH_STATUS_DIM_CK, HEALTH_STATUS_CODE, PLAN_DIM_CK | Lookup on HEALTH_STATUS_CODE = o_HEALTH_STAT and PLAN_DIM_CK = PLAN_DIM_CK1 | exp_TRIM_DATA, mplt_COMMON_RETRIEVE_DIM_PLAN_CK | Lookup caching enabled, Cache Dir: $PMCacheDir, Table: DIM_HEALTH_STATUS |
+| mplt_SET_HEALTH_STATUS_DEFAULT_KEYS | Mapplet | o_HEALTH_STAT, PLAN_DIM_CK1 | PARENT_DIM_CK | Sets default keys for health status | lkp_DIM_HEALTH_STATUS, exp_TRIM_DATA | Mapplet Type: NATIVE |
+| lkp_DIM_RISK_POPULATION | Lookup | o_RISK_POP, PLAN_DIM_CK1 | RISK_POPULATION_DIM_CK, RISK_POPULATION_CODE, PLAN_DIM_CK | Lookup on RISK_POPULATION_CODE = o_RISK_POP and PLAN_DIM_CK = PLAN_DIM_CK1 | exp_TRIM_DATA, mplt_COMMON_RETRIEVE_DIM_PLAN_CK | Lookup caching enabled, Cache Dir: $PMCacheDir, Table: DIM_RISK_POPULATION |
+| mplt_DIM_RISK_POP_SET_DEFAULT_KEYS | Mapplet | o_RISK_POP, PLAN_DIM_CK1 | PARENT_DIM_CK | Sets default keys for risk population | lkp_DIM_RISK_POPULATION, exp_TRIM_DATA | Mapplet Type: NATIVE |
+| lkp_DIM_ETHNIC_GROUP | Lookup | o_ETHINICITY, PLAN_DIM_CK_in | ETHNIC_GROUP_DIM_CK, ETHNIC_GROUP_CODE, ETHNIC_GROUP_DESC, SOURCE_DIM_CK, PLAN_DIM_CK | Lookup on ETHNIC_GROUP_CODE = o_ETHINICITY and PLAN_DIM_CK = PLAN_DIM_CK_in | exp_TRIM_DATA, mplt_COMMON_RETRIEVE_DIM_PLAN_CK | Lookup caching enabled, Cache Dir: $PMCacheDir, Table: DIM_ETHNIC_GROUP |
+| mplt_DIM_ETHINIC_GROUP_SET_DEFAULT_KEYS | Mapplet | o_ETHINICITY, PLAN_DIM_CK_in | PARENT_DIM_CK | Sets default keys for ethnic group | lkp_DIM_ETHNIC_GROUP, exp_TRIM_DATA | Mapplet Type: NATIVE |
+| lkp_dynamic_DIM_MEMBER | Lookup (Dynamic) | i_MEMBER_NBR, i_MEMBER_DIM_CK, i_PLAN_DIM_CK, i_VERSION_EFFECTIVE_DATE, i_EDW_MEMBER_CK | MEMBER_DIM_CK, MEMBER_NBR, PLAN_DIM_CK, EDW_MEMBER_CK, VERSION_EFFECTIVE_DATE, NewLookupRow | Dynamic lookup on MEMBER_NBR and PLAN_DIM_CK | exp_TRIM_DATA, exp_FIND_EDW_MEMBER_CK, seq_DIM_MEMBER, mplt_COMMON_RETRIEVE_DIM_PLAN_CK | Dynamic Lookup Cache: true, Table: DIM_MEMBER |
+| exp_FIND_EDW_MEMBER_CK | Transformation | o_MEMBER_NBR_exp_TRIM_DATA, PLAN_DIM_CK, SRC_MBR_ID | o_EDW_MEMBER_CK | IIF(ISNULL(:LKP.lkp_DIM_PRE_MBR(PLAN_DIM_CK, SRC_MBR_ID)), NEXTVAL, :LKP.lkp_DIM_PRE_MBR(PLAN_DIM_CK, SRC_MBR_ID)) | lkp_DIM_PRE_MBR, seq_EDW_MEMBER_CK | Tracing Level: Normal, Optional: true |
+| seq_DIM_MEMBER | Sequence Generator | N/A | NEXTVAL | Generates sequence for MEMBER_DIM_CK | N/A | Start Value: 0, Increment: 1, Shared Sequence |
+| seq_EDW_MEMBER_CK | Sequence Generator | N/A | NEXTVAL | Generates sequence for EDW_MEMBER_CK | N/A | Start Value: 14855528, Increment: 1, Shared Sequence |
+| exp_ADD_TO_DATE_IF_DUP | Transformation | i_VERSION_EFFECTIVE_DATE, VERSION_EFFECTIVE_DATE_LKP | o_VERSION_EFFECTIVE_DATE | IIF(VERSION_EFFECTIVE_DATE <= VERSION_EFFECTIVE_DATE_LKP, ADD_TO_DATE(VERSION_EFFECTIVE_DATE_LKP, 'MI',1), VERSION_EFFECTIVE_DATE) | lkp_dynamic_DIM_MEMBER | Tracing Level: Normal, Optional: true |
+| exp_AUDIT_FIELDS1 | Transformation | o_LAST_ACTION_USR_rtr_DIM_MEMBER_NEW | DELETED_IND, VERSION_END_DATE, ACTIVE_IND, DW_INSERT_AGENT_ID, DW_INSERT_DATE, DW_UPDATE_AGENT_ID, DW_UPDATE_DATE, ALTERNATE_COVERAGE_IND, updated_VERSION_END_DATE, updated_ACTIVE_IND | Multiple audit and logic expressions for audit fields | rtr_DIM_MEMBER_NEW | Tracing Level: Normal, Optional: true |
+| exp_AUDIT_FIELDS11 | Transformation | o_LAST_ACTION_USR_rtr_DIM_MEMBER_NEW | DELETED_IND, VERSION_END_DATE, ACTIVE_IND, DW_INSERT_AGENT_ID, DW_INSERT_DATE, DW_UPDATE_AGENT_ID, DW_UPDATE_DATE, ALTERNATE_COVERAGE_IND, updated_VERSION_END_DATE, updated_ACTIVE_IND | Multiple audit and logic expressions for audit fields | rtr_DIM_MEMBER_NEW | Tracing Level: Normal, Optional: true |
+| rtr_DIM_MEMBER_NEW | Router | INPUT | DEFAULT1, NEW_ROW_MEMBER | Routes rows based on target table and insert/update logic | _EXPR_rtr_DIM_MEMBER_NEW | Tracing Level: Normal, Optional: true |
+| DIM_MEMBER | Target | DefaultGroup | N/A | N/A | _EXPR_DIM_MEMBER | FieldMappingMode: MANUAL, DataAdapter: PARAMETERIZED |
+| DIM_MEMBER_MASTER | Target | DefaultGroup | N/A | N/A | _EXPR_DIM_MEMBER_MASTER | FieldMappingMode: MANUAL, DataAdapter: PARAMETERIZED |
+| DIM_MEMBER_UPDATE_VERSION_END | Target | DefaultGroup | N/A | N/A | _EXPR_DIM_MEMBER_UPDATE_VERSION_END | FieldMappingMode: MANUAL, DataAdapter: PARAMETERIZED |
+| DIM_MEMBER_VERSION_INSERT | Target | DefaultGroup | N/A | N/A | _EXPR_DIM_MEMBER_VERSION_INSERT | FieldMappingMode: MANUAL, DataAdapter: PARAMETERIZED |
