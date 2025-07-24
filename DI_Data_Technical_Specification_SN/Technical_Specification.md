@@ -1,65 +1,61 @@
 =============================================
 Author: Ascendion AVA+
-Date: <Leave it blank>
-Description: Technical specification for integrating BRANCH_OPERATIONAL_DETAILS into BRANCH_SUMMARY_REPORT
+Date: 
+Description: Technical Specification for integrating BRANCH_OPERATIONAL_DETAILS into BRANCH_SUMMARY_REPORT
 =============================================
 
-# Technical Specification for Integration of BRANCH_OPERATIONAL_DETAILS
+# Technical Specification for Integration of BRANCH_OPERATIONAL_DETAILS into BRANCH_SUMMARY_REPORT
 
 ## Introduction
-This document outlines the technical specifications for integrating the new source table `BRANCH_OPERATIONAL_DETAILS` into the target table `BRANCH_SUMMARY_REPORT`. The enhancement is driven by compliance and audit requirements.
+This document outlines the technical specifications for integrating the new source table `BRANCH_OPERATIONAL_DETAILS` into the existing `BRANCH_SUMMARY_REPORT` table. The integration is aimed at enhancing regulatory reporting and audit readiness by incorporating branch-level operational metadata.
 
 ## Code Changes
 ### Impacted Areas
-- Scala ETL logic
-- Delta table structure
-- Data validation and reconciliation routines
+- **Scala ETL Logic:** Update the join logic to include `BRANCH_OPERATIONAL_DETAILS`.
+- **Delta Table Structure:** Add new columns `REGION` and `LAST_AUDIT_DATE`.
+- **Data Validation and Reconciliation:** Update routines to account for new columns.
 
-### Required Changes
-1. **Schema Update:**
-   - Alter `BRANCH_SUMMARY_REPORT` to add `REGION STRING` and `LAST_AUDIT_DATE DATE`.
+### Pseudocode
+```scala
+val activeBranchDetails = branchOperationalDetails
+  .filter($"IS_ACTIVE" === "Y")
+  .select($"BRANCH_ID", $"REGION", $"LAST_AUDIT_DATE")
 
-2. **ETL Logic:**
-   - Enhance the Scala ETL job to:
-     - LEFT JOIN `BRANCH_OPERATIONAL_DETAILS` ON `BRANCH_ID`
-     - Populate `REGION` and `LAST_AUDIT_DATE` only if `IS_ACTIVE = 'Y'`, else set to NULL.
-   - Ensure backward compatibility for existing records.
-
-3. **Data Validation:**
-   - Validate that for each record in `BRANCH_SUMMARY_REPORT`, the new columns are only populated where the source branch is active.
-   - Reconcile counts of active branches with non-NULL values in the new columns.
+val updatedSummary = branchSummaryReport
+  .join(activeBranchDetails, Seq("BRANCH_ID"), "left_outer")
+  .withColumn("REGION", when($"REGION".isNotNull, $"REGION").otherwise(lit(null)))
+  .withColumn("LAST_AUDIT_DATE", when($"LAST_AUDIT_DATE".isNotNull, $"LAST_AUDIT_DATE").otherwise(lit(null)))
+```
 
 ## Data Model Updates
-### Existing Source Data Model
-Refer to the provided DDL file for the schema of `BRANCH_OPERATIONAL_DETAILS`.
+### Source Table
+| Column Name      | Data Type         | Description                       |
+|------------------|------------------|-----------------------------------|
+| BRANCH_ID        | INT              | Unique branch identifier          |
+| REGION           | VARCHAR2(50)     | Branch region                     |
+| MANAGER_NAME     | VARCHAR2(100)    | Branch manager's name             |
+| LAST_AUDIT_DATE  | DATE             | Date of last branch audit         |
+| IS_ACTIVE        | CHAR(1)          | 'Y' if branch is active, else 'N' |
 
-### Existing Target Data Model
-Refer to the provided DDL file for the schema of `BRANCH_SUMMARY_REPORT`.
-
-### Updates
-- Add `REGION` and `LAST_AUDIT_DATE` columns to `BRANCH_SUMMARY_REPORT`.
+### Target Table
+| Column Name      | Data Type         | Description                       |
+|------------------|------------------|-----------------------------------|
+| REGION           | STRING           | Branch region                     |
+| LAST_AUDIT_DATE  | DATE             | Date of last branch audit         |
 
 ## Source-to-Target Mapping
-### Mapping and Transformation Rules
-| Target Column      | Source Table                | Source Column      | Transformation Rule                                                                 |
-|--------------------|----------------------------|--------------------|-------------------------------------------------------------------------------------|
-| BRANCH_ID          | Existing logic              | BRANCH_ID          | As per existing join logic                                                          |
-| BRANCH_NAME        | Existing logic              | BRANCH_NAME        | As per existing logic                                                               |
-| TOTAL_TRANSACTIONS | Existing logic              | N/A                | As per existing logic                                                               |
-| TOTAL_AMOUNT       | Existing logic              | N/A                | As per existing logic                                                               |
-| REGION             | BRANCH_OPERATIONAL_DETAILS  | REGION             | If IS_ACTIVE = 'Y' for branch, set REGION; else NULL                                |
-| LAST_AUDIT_DATE    | BRANCH_OPERATIONAL_DETAILS  | LAST_AUDIT_DATE    | If IS_ACTIVE = 'Y' for branch, set LAST_AUDIT_DATE; else NULL                       |
-
-### Example Mapping
-| BRANCH_ID | BRANCH_NAME | TOTAL_TRANSACTIONS | TOTAL_AMOUNT | REGION   | LAST_AUDIT_DATE |
-|-----------|-------------|--------------------|--------------|----------|-----------------|
-| 1001      | Midtown     | 120                | 500000.00    | North    | 2024-03-15      |
-| 1002      | Uptown      | 80                 | 320000.00    | NULL     | NULL            |
+| Source Table                | Source Column      | Target Table           | Target Column      | Transformation Rule                                                                 |
+|-----------------------------|-------------------|------------------------|-------------------|-------------------------------------------------------------------------------------|
+| BRANCH_OPERATIONAL_DETAILS  | REGION            | BRANCH_SUMMARY_REPORT  | REGION            | If IS_ACTIVE = 'Y', set REGION; else NULL                                           |
+| BRANCH_OPERATIONAL_DETAILS  | LAST_AUDIT_DATE   | BRANCH_SUMMARY_REPORT  | LAST_AUDIT_DATE   | If IS_ACTIVE = 'Y', set LAST_AUDIT_DATE; else NULL                                  |
 
 ## Assumptions and Constraints
-- Only rows in `BRANCH_OPERATIONAL_DETAILS` where `IS_ACTIVE = 'Y'` will provide values for `REGION` and `LAST_AUDIT_DATE`.
-- Backward compatibility: For historical records where no matching or active operational details exist, the new columns will be NULL.
+- Full reload of `BRANCH_SUMMARY_REPORT` is required upon deployment.
+- Backward compatibility with older records is maintained.
+- All transformation logic must be auditable and maintainable.
 
 ## References
-- [JIRA Story: Extend BRANCH_SUMMARY_REPORT Logic to Integrate New Source Table]
-- [Confluence: Business and Technical Requirements for Branch Operational Integration]
+- JIRA Story: Extend BRANCH_SUMMARY_REPORT Logic to Integrate New Source Table
+- Confluence Documentation: ETL Change - Integration of BRANCH_OPERATIONAL_DETAILS into BRANCH_SUMMARY_REPORT
+
+=============================================
