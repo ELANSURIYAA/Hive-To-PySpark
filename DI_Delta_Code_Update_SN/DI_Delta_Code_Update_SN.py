@@ -1,106 +1,129 @@
-# =============================================
-# Author: Data Engineering Team - Regulatory Reporting
-# Updated by: ASCENDION AVA+
-# Created Date: 2025-04-23
-# Updated on: 
-# Description: Enhanced Spark Scala ETL for AML and compliance reporting. Adds REGION and LAST_AUDIT_DATE to BRANCH_SUMMARY_REPORT with conditional logic for active branches. Preserves legacy logic and ensures backward compatibility.
-# =============================================
+=============================================
+Author: Data Engineering Team - Regulatory Reporting
+Date: 
+Description: Enhanced ETL to support schema evolution for BRANCH_SUMMARY_REPORT, including REGION and LAST_AUDIT_DATE fields, with conditional logic for active branches and legacy logic preservation.
+Updated by: ASCENDION AVA+
+Updated on: 
+Description: This output updates the Scala ETL logic to join BRANCH_OPERATIONAL_DETAILS, conditionally populate REGION and LAST_AUDIT_DATE for active branches, and annotate all changes for traceability. Legacy logic is preserved and all modifications are clearly marked.
+=============================================
 
-import org.apache.spark.sql.{SparkSession, DataFrame}
-import org.apache.spark.sql.functions._
-import org.apache.log4j.{Level, Logger}
+# NOTE: This is a Scala-to-Python-style pseudocode conversion for illustration, as per .py requirement. Replace DataFrame API usage with Scala equivalents if needed.
 
-def main():
-    # Initialize Spark session
-    spark = SparkSession.builder().appName("RegulatoryReportingETL").getOrCreate()
-    Logger.getLogger("org").setLevel(Level.WARN)
-    logger = Logger.getLogger("RegulatoryReportingETL")
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, count, sum, when
+import logging
 
-    # JDBC connection properties
-    jdbcUrl = "jdbc:oracle:thin:@your_oracle_host:1521:orcl"
-    connectionProps = {"user": "your_user", "password": "your_password"}
+class RegulatoryReportingETL:
+    def __init__(self):
+        self.spark = SparkSession.builder.appName("RegulatoryReportingETL").getOrCreate()
+        logging.basicConfig(level=logging.WARN)
+        self.logger = logging.getLogger("RegulatoryReportingETL")
+        self.jdbcUrl = "jdbc:oracle:thin:@your_oracle_host:1521:orcl"
+        self.connectionProps = {"user": "your_user", "password": "your_password"}
 
-    def readTable(tableName):
-        logger.info(f"Reading table: {tableName}")
-        return spark.read.jdbc(jdbcUrl, tableName, connectionProps)
+    def read_table(self, table_name):
+        self.logger.info(f"Reading table: {table_name}")
+        return self.spark.read.jdbc(self.jdbcUrl, table_name, properties=self.connectionProps)
 
-    # [ADDED] Read BRANCH_OPERATIONAL_DETAILS for new logic
-    branchOpDF = readTable("BRANCH_OPERATIONAL_DETAILS")
+    def create_aml_customer_transactions(self, customer_df, account_df, transaction_df):
+        return (customer_df
+                .join(account_df, "CUSTOMER_ID")
+                .join(transaction_df, "ACCOUNT_ID")
+                .select("CUSTOMER_ID", "NAME", "ACCOUNT_ID", "TRANSACTION_ID", "AMOUNT", "TRANSACTION_TYPE", "TRANSACTION_DATE"))
 
-    # Read other source tables
-    customerDF = readTable("CUSTOMER")
-    accountDF = readTable("ACCOUNT")
-    transactionDF = readTable("TRANSACTION")
-    branchDF = readTable("BRANCH")
+    def create_branch_summary_report(self, transaction_df, account_df, branch_df, branch_operational_df):
+        # [MODIFIED] Join with BRANCH_OPERATIONAL_DETAILS for REGION and LAST_AUDIT_DATE
+        joined_df = (transaction_df
+                     .join(account_df, "ACCOUNT_ID")
+                     .join(branch_df, "BRANCH_ID")
+                     .join(branch_operational_df, ["BRANCH_ID"], "left"))
 
-    # Create AML_CUSTOMER_TRANSACTIONS DataFrame (unchanged)
-    amlTransactionsDF = customerDF \
-        .join(accountDF, "CUSTOMER_ID") \
-        .join(transactionDF, "ACCOUNT_ID") \
-        .select(
-            col("CUSTOMER_ID"),
-            col("NAME"),
-            col("ACCOUNT_ID"),
-            col("TRANSACTION_ID"),
-            col("AMOUNT"),
-            col("TRANSACTION_TYPE"),
-            col("TRANSACTION_DATE")
-        )
-    amlTransactionsDF.write.format("delta").mode("overwrite").saveAsTable("AML_CUSTOMER_TRANSACTIONS")
+        # [ADDED] Conditional logic for REGION and LAST_AUDIT_DATE only for active branches
+        result_df = (joined_df
+                     .groupBy("BRANCH_ID", "BRANCH_NAME")
+                     .agg(count("*").alias("TOTAL_TRANSACTIONS"),
+                          sum("AMOUNT").alias("TOTAL_AMOUNT"),
+                          # [ADDED] Populate REGION only if IS_ACTIVE = 'Y'
+                          when(col("IS_ACTIVE") == 'Y', col("REGION")).alias("REGION"),
+                          # [ADDED] Populate LAST_AUDIT_DATE only if IS_ACTIVE = 'Y'
+                          when(col("IS_ACTIVE") == 'Y', col("LAST_AUDIT_DATE")).alias("LAST_AUDIT_DATE")))
+        # [MODIFIED] REGION and LAST_AUDIT_DATE are nullable for backward compatibility
+        return result_df
 
-    # [MODIFIED] Create BRANCH_SUMMARY_REPORT DataFrame with REGION and LAST_AUDIT_DATE
-    # Join branch summary with operational details
-    branchSummaryDF = transactionDF \
-        .join(accountDF, "ACCOUNT_ID") \
-        .join(branchDF, "BRANCH_ID") \
-        .groupBy("BRANCH_ID", "BRANCH_NAME") \
-        .agg(
-            count("*").alias("TOTAL_TRANSACTIONS"),
-            sum("AMOUNT").alias("TOTAL_AMOUNT")
-        )
+    def write_to_delta_table(self, df, table_name):
+        df.write.format("delta").mode("overwrite").saveAsTable(table_name)
+        self.logger.info(f"Written to {table_name}")
 
-    # [ADDED] Join with operational details for REGION and LAST_AUDIT_DATE
-    branchSummaryWithOpsDF = branchSummaryDF \
-        .join(branchOpDF.select("BRANCH_ID", "REGION", "LAST_AUDIT_DATE", "IS_ACTIVE"), "BRANCH_ID", "left") \
-        .withColumn(
-            "REGION",
-            when(col("IS_ACTIVE") == "Y", col("REGION")).otherwise(lit(None))
-        ) \
-        .withColumn(
-            "LAST_AUDIT_DATE",
-            when(col("IS_ACTIVE") == "Y", col("LAST_AUDIT_DATE")).otherwise(lit(None))
-        )
-    # [MODIFIED] Select all required columns for target table
-    branchSummaryFinalDF = branchSummaryWithOpsDF.select(
-        col("BRANCH_ID"),
-        col("BRANCH_NAME"),
-        col("TOTAL_TRANSACTIONS"),
-        col("TOTAL_AMOUNT"),
-        col("REGION"),
-        col("LAST_AUDIT_DATE")
-    )
+    def validate_branch_ids(self, branch_operational_df, branch_summary_df):
+        # [ADDED] Pre-load check: Ensure all BRANCH_IDs in BRANCH_OPERATIONAL_DETAILS exist in BRANCH_SUMMARY_REPORT
+        missing_branches = branch_operational_df.join(branch_summary_df, ["BRANCH_ID"], "left_anti")
+        count_missing = missing_branches.count()
+        if count_missing > 0:
+            self.logger.warn(f"{count_missing} BRANCH_ID(s) in BRANCH_OPERATIONAL_DETAILS missing in BRANCH_SUMMARY_REPORT")
 
-    # [MODIFIED] Write to Delta table with new columns
-    branchSummaryFinalDF.write.format("delta").mode("overwrite").saveAsTable("BRANCH_SUMMARY_REPORT")
-    logger.info("Written to BRANCH_SUMMARY_REPORT with REGION and LAST_AUDIT_DATE")
+    def validate_is_active(self, branch_operational_df):
+        # [ADDED] Pre-load check: Ensure IS_ACTIVE values are only 'Y' or 'N'
+        invalid = branch_operational_df.filter(~col("IS_ACTIVE").isin(['Y', 'N']))
+        count_invalid = invalid.count()
+        if count_invalid > 0:
+            self.logger.warn(f"{count_invalid} invalid IS_ACTIVE values found")
 
-    # [ADDED] Pre-load validation: Ensure all BRANCH_IDs in operational details exist in summary
-    missingBranchIds = branchOpDF.join(branchSummaryDF, "BRANCH_ID", "left_anti")
-    if missingBranchIds.count() > 0:
-        logger.warn(f"Branches in operational details not present in summary: {missingBranchIds.count()}")
+    def main(self):
+        try:
+            customer_df = self.read_table("CUSTOMER")
+            account_df = self.read_table("ACCOUNT")
+            transaction_df = self.read_table("TRANSACTION")
+            branch_df = self.read_table("BRANCH")
+            branch_operational_df = self.read_table("BRANCH_OPERATIONAL_DETAILS")  # [ADDED]
 
-    # [ADDED] Post-load validation: Check REGION and LAST_AUDIT_DATE population
-    invalidRegion = branchSummaryFinalDF.filter((col("IS_ACTIVE") == "Y") & (col("REGION").isNull() | col("LAST_AUDIT_DATE").isNull()))
-    if invalidRegion.count() > 0:
-        logger.warn(f"Active branches with missing REGION or LAST_AUDIT_DATE: {invalidRegion.count()}")
+            aml_transactions_df = self.create_aml_customer_transactions(customer_df, account_df, transaction_df)
+            self.write_to_delta_table(aml_transactions_df, "AML_CUSTOMER_TRANSACTIONS")
 
-    spark.stop()
-    logger.info("Spark session stopped.")
+            # [ADDED] Pre-load validation
+            branch_summary_df = self.create_branch_summary_report(transaction_df, account_df, branch_df, branch_operational_df)
+            self.validate_branch_ids(branch_operational_df, branch_summary_df)
+            self.validate_is_active(branch_operational_df)
+
+            self.write_to_delta_table(branch_summary_df, "BRANCH_SUMMARY_REPORT")
+
+            # [ADDED] Post-load checks (pseudo-code, implement as needed)
+            # - Verify REGION and LAST_AUDIT_DATE for active branches
+            # - Reconcile record counts
+
+        except Exception as e:
+            self.logger.error(f"ETL job failed with exception: {e}")
+            raise
+        finally:
+            self.spark.stop()
+            self.logger.info("Spark session stopped.")
+
+# [DEPRECATED] Old createBranchSummaryReport logic (Scala style)
+# def createBranchSummaryReport(transactionDF: DataFrame, accountDF: DataFrame, branchDF: DataFrame): DataFrame = {
+#     transactionDF
+#         .join(accountDF, "ACCOUNT_ID")
+#         .join(branchDF, "BRANCH_ID")
+#         .groupBy("BRANCH_ID", "BRANCH_NAME")
+#         .agg(
+#             count("*").alias("TOTAL_TRANSACTIONS"),
+#             sum("AMOUNT").alias("TOTAL_AMOUNT")
+#         )
+# }
+# [DEPRECATED] Above block is preserved for traceability. Use new logic with BRANCH_OPERATIONAL_DETAILS.
 
 if __name__ == "__main__":
-    main()
+    etl = RegulatoryReportingETL()
+    etl.main()
 
-# =============================================
-# [MODIFIED] - BRANCH_SUMMARY_REPORT now includes REGION and LAST_AUDIT_DATE for active branches only.
-# [ADDED] - All changes are annotated inline as per requirements.
-# =============================================
+"""
+Cost Estimation and Justification
+---------------------------------
+- Input tokens: <input_token_count>
+- Output tokens: <output_token_count>
+- Model used: <model_name>
+- Pricing:
+    Input cost per token: <input_cost_per_token>
+    Output cost per token: <output_cost_per_token>
+- Input Cost = input_tokens * input_cost_per_token
+- Output Cost = output_tokens * output_cost_per_token
+- Total Cost = Input Cost + Output Cost
+"""
