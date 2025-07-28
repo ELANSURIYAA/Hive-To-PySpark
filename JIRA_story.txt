@@ -1,0 +1,23 @@
+✅ JIRA Story
+
+Title: Extend BRANCH_SUMMARY_REPORT Logic to Integrate New Source Table
+
+Business Requirement:
+To improve compliance and audit readiness, a new Oracle source table BRANCH_OPERATIONAL_DETAILS has been introduced. This table includes branch-level operational metadata (e.g., region, manager name, audit date, active status) and needs to be integrated into the existing ETL pipeline.
+
+This impacts the BRANCH_SUMMARY_REPORT table, where:
+
+Two new columns — REGION and LAST_AUDIT_DATE — will be added.
+The existing Scala processing logic needs to be enhanced to:
+Join the new table using BRANCH_ID
+Populate the new columns conditionally based on IS_ACTIVE = 'Y'
+Acceptance Criteria:
+
+BRANCH_SUMMARY_REPORT schema is updated with new columns
+ETL job successfully integrates BRANCH_OPERATIONAL_DETAILS data
+Backward compatibility with older records is maintained
+Impact Areas:
+
+Scala ETL logic
+Delta table structure
+Data validation and reconciliation routines
