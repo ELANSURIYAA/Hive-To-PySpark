@@ -1,11 +1,29 @@
 =============================================
 Author: Data Engineering Team - Regulatory Reporting
 Date: 2025-04-23
-Description: Enhanced Spark Scala ETL for AML and compliance reporting, with schema evolution for BRANCH_SUMMARY_REPORT, conditional population of REGION and LAST_AUDIT_DATE, and backward compatibility.
+Description: Spark Scala ETL job for AML and compliance reporting, enhanced to support new regulatory branch operational fields and schema evolution.
 Updated by: ASCENDION AVA+
 Updated on: 
-Description: This output adds logic to join BRANCH_SUMMARY_REPORT with BRANCH_OPERATIONAL_DETAILS, conditionally populates REGION and LAST_AUDIT_DATE for active branches, and annotates all changes for traceability.
+Description: Adds REGION and LAST_AUDIT_DATE to BRANCH_SUMMARY_REPORT, with conditional population for active branches, and preserves legacy logic for backward compatibility.
 =============================================
+
+/*
+* ----------------------------------------------------------------------------------------
+* Script Name   : RegulatoryReportingETL.scala
+* Created By    : Data Engineering Team - Regulatory Reporting
+* Author        : <Your Name>
+* Created Date  : 2025-04-23
+* Description   : This Spark Scala job extracts data from Oracle DB for AML and compliance
+*                 reporting, transforms it, and loads it into two Delta tables on Databricks:
+*                 - AML_CUSTOMER_TRANSACTIONS
+*                 - BRANCH_SUMMARY_REPORT
+*                 [MODIFIED] Enhanced to support REGION and LAST_AUDIT_DATE fields as per new technical specifications.
+* ----------------------------------------------------------------------------------------
+* Updated by    : ASCENDION AVA+
+* Updated on    : 
+* Description   : Adds REGION and LAST_AUDIT_DATE to BRANCH_SUMMARY_REPORT, with conditional population for active branches, and preserves legacy logic for backward compatibility.
+* ----------------------------------------------------------------------------------------
+*/
 
 import org.apache.spark.sql.{SparkSession, DataFrame}
 import org.apache.spark.sql.functions._
@@ -52,9 +70,13 @@ object RegulatoryReportingETL {
 
     // [MODIFIED] Create BRANCH_SUMMARY_REPORT DataFrame with REGION and LAST_AUDIT_DATE
     /**
-      * [ADDED] Joins BRANCH_SUMMARY_REPORT with BRANCH_OPERATIONAL_DETAILS to add REGION and LAST_AUDIT_DATE.
-      * Populates these fields only for active branches (IS_ACTIVE = 'Y').
-      * Legacy logic for BRANCH_NAME, TOTAL_TRANSACTIONS, TOTAL_AMOUNT is preserved.
+      * [ADDED] Joins BRANCH_OPERATIONAL_DETAILS and applies conditional logic for REGION and LAST_AUDIT_DATE.
+      * [MODIFIED] Preserves legacy logic for BRANCH_NAME, TOTAL_TRANSACTIONS, TOTAL_AMOUNT.
+      * @param transactionDF Transaction DataFrame
+      * @param accountDF Account DataFrame
+      * @param branchDF Branch DataFrame
+      * @param branchOperationalDF Branch Operational Details DataFrame
+      * @return DataFrame for BRANCH_SUMMARY_REPORT
       */
     def createBranchSummaryReport(
         transactionDF: DataFrame,
@@ -62,8 +84,7 @@ object RegulatoryReportingETL {
         branchDF: DataFrame,
         branchOperationalDF: DataFrame
     ): DataFrame = {
-        // [ADDED] Aggregate transaction data by branch
-        val summaryDF = transactionDF
+        val baseSummaryDF = transactionDF
             .join(accountDF, "ACCOUNT_ID")
             .join(branchDF, "BRANCH_ID")
             .groupBy("BRANCH_ID", "BRANCH_NAME")
@@ -73,26 +94,26 @@ object RegulatoryReportingETL {
             )
 
         // [ADDED] Join with BRANCH_OPERATIONAL_DETAILS for REGION and LAST_AUDIT_DATE
-        val joinedDF = summaryDF
+        val summaryWithOperational = baseSummaryDF
             .join(branchOperationalDF, Seq("BRANCH_ID"), "left")
             .withColumn(
                 "REGION",
-                when(col("IS_ACTIVE") === lit("Y"), col("REGION")).otherwise(lit(null))
-            ) // [ADDED] Populate REGION only if IS_ACTIVE = 'Y'
+                when(col("IS_ACTIVE") === lit("Y"), col("REGION")).otherwise(lit(null)) // [ADDED] Only for active branches
+            )
             .withColumn(
                 "LAST_AUDIT_DATE",
-                when(col("IS_ACTIVE") === lit("Y"), col("LAST_AUDIT_DATE")).otherwise(lit(null))
-            ) // [ADDED] Populate LAST_AUDIT_DATE only if IS_ACTIVE = 'Y'
-
-        // [ADDED] Select columns in target schema order
-        joinedDF.select(
-            col("BRANCH_ID"),
-            col("BRANCH_NAME"),
-            col("TOTAL_TRANSACTIONS"),
-            col("TOTAL_AMOUNT"),
-            col("REGION"),
-            col("LAST_AUDIT_DATE")
-        )
+                when(col("IS_ACTIVE") === lit("Y"), col("LAST_AUDIT_DATE")).otherwise(lit(null)) // [ADDED] Only for active branches
+            )
+            // [MODIFIED] Retain legacy columns as-is
+            .select(
+                col("BRANCH_ID"),
+                col("BRANCH_NAME"),
+                col("TOTAL_TRANSACTIONS"),
+                col("TOTAL_AMOUNT"),
+                col("REGION"),
+                col("LAST_AUDIT_DATE")
+            )
+        summaryWithOperational
     }
 
     // Write DataFrame to Delta table
@@ -116,14 +137,8 @@ object RegulatoryReportingETL {
             val amlTransactionsDF = createAmlCustomerTransactions(customerDF, accountDF, transactionDF)
             writeToDeltaTable(amlTransactionsDF, "AML_CUSTOMER_TRANSACTIONS")
 
-            // [DEPRECATED] Old BRANCH_SUMMARY_REPORT logic (commented out for traceability)
-            /*
-            val branchSummaryDF = createBranchSummaryReport(transactionDF, accountDF, branchDF)
-            writeToDeltaTable(branchSummaryDF, "BRANCH_SUMMARY_REPORT")
-            */
-
-            // [MODIFIED] New BRANCH_SUMMARY_REPORT logic with REGION and LAST_AUDIT_DATE
-            val branchSummaryDF = createBranchSummaryReport(transactionDF, accountDF, branchDF, branchOperationalDF) // [MODIFIED]
+            // [MODIFIED] Create and write BRANCH_SUMMARY_REPORT with new fields
+            val branchSummaryDF = createBranchSummaryReport(transactionDF, accountDF, branchDF, branchOperationalDF)
             writeToDeltaTable(branchSummaryDF, "BRANCH_SUMMARY_REPORT")
 
         } catch {
@@ -137,7 +152,14 @@ object RegulatoryReportingETL {
     }
 }
 
-// [MODIFIED] All changes are annotated inline as per technical specification.
-// [ADDED] REGION and LAST_AUDIT_DATE are conditionally populated for active branches only.
-// [DEPRECATED] Previous logic is commented out for traceability.
-// [ADDED] Metadata header updated as per requirements.
+// [DEPRECATED] Previous version of createBranchSummaryReport without REGION and LAST_AUDIT_DATE
+// def createBranchSummaryReport(transactionDF: DataFrame, accountDF: DataFrame, branchDF: DataFrame): DataFrame = {
+//     transactionDF
+//         .join(accountDF, "ACCOUNT_ID")
+//         .join(branchDF, "BRANCH_ID")
+//         .groupBy("BRANCH_ID", "BRANCH_NAME")
+//         .agg(
+//             count("*").alias("TOTAL_TRANSACTIONS"),
+//             sum("AMOUNT").alias("TOTAL_AMOUNT")
+//         )
+// }
