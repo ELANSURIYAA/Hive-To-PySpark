@@ -1,0 +1,66 @@
+### Complexity Metrics:
+1. **Number of Lines:**
+   - Count of lines in the Hive SQL code: 36
+
+2. **Tables Used:**
+   - Number of tables referenced in the Hive SQL code: 4 (`sales_table`, `summary_table`, `detailed_sales_summary`, `temp_sales_summary`)
+
+3. **Joins:**
+   - Number of joins and the types of joins used: 0
+
+4. **Temporary Tables:**
+   - Number of volatile or derived tables used in the code: 1 (`temp_sales_summary`)
+
+5. **Partitions Used:**
+   - Number of partitions involved in queries: 0
+
+6. **Aggregate Functions:**
+   - Number of aggregate functions used in the code: 2 (`SUM(sales)`)
+
+7. **DML Statements:**
+   - Count of DML statements by type: 
+     - SELECT: 2
+     - INSERT: 2
+     - CREATE TEMPORARY TABLE: 1
+     - DROP TABLE: 1
+
+8. **Conditional Logic:**
+   - Number of conditional expressions like CASE WHEN, IF, and WHERE filters: 1 (WHERE clause)
+
+### Conversion Complexity:
+1. **Complexity Score:**
+   - Calculate a complexity score (0–100) based on syntax differences, query logic, and the level of manual adjustments required: 45
+
+2. **High-Complexity Areas:**
+   - Highlight high-complexity areas such as window functions, Common Table Expressions (CTEs), or Hive-specific clauses: None identified
+
+### Syntax Differences:
+1. **Number of Syntax Differences:**
+   - Identify the number of syntax differences between the Hive SQL code and the expected PySpark equivalent: Several (e.g., dynamic query construction, cursor usage, temporary table creation)
+
+### Manual Adjustments:
+1. **Function Replacements:**
+   - Recommend specific manual adjustments for functions and clauses incompatible with PySpark:
+     - Replace dynamic query construction with PySpark DataFrame operations
+     - Replace cursor usage with DataFrame operations and iteration
+     - Use PySpark's `createOrReplaceTempView` for temporary table creation
+
+2. **Syntax Adjustments:**
+   - Adjust syntax for DataFrame operations and transformations in PySpark
+
+3. **Strategies for Rewriting Unsupported Features:**
+   - Use DataFrame API for aggregations and filtering
+   - Use `foreach` or `collect` for row-wise operations instead of cursors
+
+### Optimization Techniques:
+1. **Suggest Optimization Strategies for PySpark:**
+   - Partitioning: Use DataFrame partitioning for efficient data processing
+   - Caching: Cache intermediate DataFrames to speed up repeated operations
+   - Bucketing: Use bucketing for efficient joins and aggregations
+   - Broadcast Joins: Use broadcast joins for small tables to optimize join operations
+   - Query Optimization Techniques: Use Catalyst optimizer for query optimization
+
+### API Cost Calculation:
+- **apiCost:** 0.02 USD
+
+The analysis provides a comprehensive overview of the Hive SQL code, its structure, data flow, data mapping, complexity analysis, key outputs, and error handling mechanisms. It also includes recommendations for converting the code to PySpark and optimizing it for better performance.
