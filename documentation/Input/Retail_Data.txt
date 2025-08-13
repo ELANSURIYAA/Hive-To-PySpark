@@ -1,0 +1,130 @@
+-- Create a database
+CREATE DATABASE IF NOT EXISTS retail_db;
+USE retail_db;
+
+-- Create a customers table
+CREATE TABLE IF NOT EXISTS customers (
+    customer_id INT,
+    customer_name STRING,
+    customer_email STRING,
+    customer_city STRING,
+    customer_state STRING,
+    customer_zipcode INT
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+-- Create an orders table
+CREATE TABLE IF NOT EXISTS orders (
+    order_id INT,
+    order_date STRING,
+    customer_id INT,
+    order_status STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+-- Query to join customers and orders
+SELECT
+    c.customer_name,
+    c.customer_city,
+    o.order_id,
+    o.order_status
+FROM
+    customers c
+JOIN
+    orders o
+ON
+    c.customer_id = o.customer_id;
+
+-- Create a partitioned sales table
+CREATE TABLE IF NOT EXISTS sales (
+    sale_id INT,
+    sale_amount DOUBLE,
+    sale_date STRING
+)
+PARTITIONED BY (region STRING)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+-- Add partitions to the sales table
+ALTER TABLE sales ADD PARTITION (region='north_america');
+ALTER TABLE sales ADD PARTITION (region='europe');
+
+-- Create a table with bucketing
+CREATE TABLE IF NOT EXISTS transactions (
+    transaction_id INT,
+    transaction_date STRING,
+    customer_id INT,
+    amount DOUBLE
+)
+CLUSTERED BY (customer_id) INTO 4 BUCKETS
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+-- Enable dynamic partitioning and insert data into sales
+SET hive.exec.dynamic.partition = true;
+SET hive.exec.dynamic.partition.mode = nonstrict;
+
+INSERT INTO sales PARTITION (region)
+SELECT
+    t.transaction_id AS sale_id,
+    t.amount AS sale_amount,
+    t.transaction_date AS sale_date,
+    CASE
+        WHEN t.customer_id IN (1, 2) THEN 'north_america'
+        ELSE 'europe'
+    END AS region
+FROM
+    transactions t;
+
+-- Query to analyze sales by region
+SELECT
+    region,
+    COUNT(*) AS total_sales,
+    SUM(sale_amount) AS total_amount
+FROM
+    sales
+GROUP BY
+    region;
+
+-- Create a temporary function for custom operations
+CREATE TEMPORARY FUNCTION reverse_string AS 'org.apache.hadoop.hive.ql.udf.generic.GenericUDFReverse';
+
+-- Use the custom UDF
+SELECT
+    sale_id,
+    reverse_string(sale_date) AS reversed_date
+FROM
+    sales;
+
+-- Create a view for frequent customers
+CREATE VIEW IF NOT EXISTS frequent_customers AS
+SELECT
+    c.customer_name,
+    COUNT(o.order_id) AS total_orders
+FROM
+    customers c
+JOIN
+    orders o
+ON
+    c.customer_id = o.customer_id
+GROUP BY
+    c.customer_name
+HAVING
+    total_orders > 1;
+
+-- Query the view
+SELECT * FROM frequent_customers;
+
+-- Drop tables and clean up
+DROP VIEW IF EXISTS frequent_customers;
+DROP TABLE IF EXISTS transactions;
+DROP TABLE IF EXISTS sales;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS customers;
+DROP DATABASE IF EXISTS retail_db;
