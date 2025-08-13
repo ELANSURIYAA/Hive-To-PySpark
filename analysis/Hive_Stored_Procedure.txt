@@ -1,0 +1,35 @@
+CREATE PROCEDURE process_sales_data(
+    IN start_date STRING,
+    IN end_date STRING
+)
+BEGIN
+    DECLARE total_sales FLOAT;
+ 
+    SET @dynamic_query = CONCAT(
+        "INSERT INTO summary_table SELECT product_id, SUM(sales) AS total_sales ",
+        "FROM sales_table WHERE sale_date BETWEEN '", start_date, "' AND '", end_date, "' ",
+        "GROUP BY product_id"
+    );
+    EXECUTE IMMEDIATE @dynamic_query;
+ 
+    CREATE TEMPORARY TABLE temp_sales_summary AS
+    SELECT product_id, SUM(sales) AS total_sales
+    FROM sales_table
+    WHERE sale_date BETWEEN start_date AND end_date
+    GROUP BY product_id;
+ 
+    DECLARE cur CURSOR FOR SELECT product_id, total_sales FROM temp_sales_summary;
+ 
+    OPEN cur;
+ 
+    FETCH cur INTO product_id, total_sales;
+    WHILE total_sales IS NOT NULL DO
+        INSERT INTO detailed_sales_summary (product_id, total_sales)
+        VALUES (product_id, total_sales);
+        FETCH cur INTO product_id, total_sales;
+    END WHILE;
+ 
+    CLOSE cur;
+ 
+    DROP TABLE temp_sales_summary;
+END;
