@@ -1,231 +1,300 @@
-# Unit Test Cases for Hive_Stored_Procedure PySpark Conversion
-# Generated for: process_sales_data function and utility functions
+# Unit Test Cases for Hive_Stored_Procedure_1.py
+# Generated for PySpark Sales Data Processing Functions
 # Version: 1
 # Date: Generated for comprehensive testing coverage
 
-## TEST CASE CATEGORIES:
+=== TEST CASE DOCUMENTATION ===
 
-### 1. HAPPY PATH SCENARIOS
+## TEST CASE ID: TC_001
+**Test Case Description:** Test get_spark_session() function with default parameters
+**Test Category:** Happy Path - Spark Session Initialization
+**Expected Outcome:** 
+- SparkSession object is created successfully
+- App name is set to "HiveStoredProcedureConversion"
+- Adaptive query execution is enabled
+- Log level is set to WARN
+**Test Data:** Default parameters
+**Assertions:** 
+- spark is not None
+- spark.conf.get("spark.sql.adaptive.enabled") == "true"
+- spark.sparkContext.getLogLevel() == "WARN"
 
-TC001: Valid Date Range Processing
-- Description: Test successful processing of sales data with valid start and end dates
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Function executes successfully, data is filtered, aggregated, and written to target tables
-- Test Data: Sales table with records within and outside the date range
-- Validation: Verify correct records are processed and inserted into summary_table and detailed_sales_summary
+## TEST CASE ID: TC_002
+**Test Case Description:** Test get_spark_session() function with custom app name
+**Test Category:** Happy Path - Spark Session Initialization
+**Expected Outcome:** 
+- SparkSession object is created successfully with custom app name
+- Custom app name is properly set
+**Test Data:** app_name="CustomTestApp"
+**Assertions:** 
+- spark is not None
+- spark.sparkContext.appName == "CustomTestApp"
 
-TC002: Single Day Date Range
-- Description: Test processing when start_date equals end_date
-- Input: start_date='2023-06-15', end_date='2023-06-15'
-- Expected Outcome: Only records from the specific date are processed
-- Test Data: Sales table with records on multiple dates including 2023-06-15
-- Validation: Verify only single day records are aggregated
+## TEST CASE ID: TC_003
+**Test Case Description:** Test process_sales_data() with valid input data - Happy Path
+**Test Category:** Happy Path - Main Processing Function
+**Expected Outcome:** 
+- Function executes successfully
+- Returns success status with correct statistics
+- Proper aggregation of sales data by product_id
+- Date filtering works correctly
+**Test Data:** 
+- start_date: "2023-01-01"
+- end_date: "2023-12-31"
+- Sample sales data with multiple products and dates
+**Assertions:** 
+- result['status'] == 'success'
+- result['total_products_processed'] > 0
+- result['total_sales_amount'] > 0
+- result['date_range'] == "2023-01-01 to 2023-12-31"
 
-TC003: Large Dataset Processing
-- Description: Test function performance with large volume of sales data
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Function handles large dataset efficiently with caching
-- Test Data: Sales table with 10,000+ records
-- Validation: Verify all records are processed correctly and performance is acceptable
+## TEST CASE ID: TC_004
+**Test Case Description:** Test process_sales_data() with empty DataFrame
+**Test Category:** Edge Case - Empty Data
+**Expected Outcome:** 
+- Function handles empty DataFrame gracefully
+- Returns success status with zero statistics
+- No errors thrown during processing
+**Test Data:** Empty DataFrame with correct schema
+**Assertions:** 
+- result['status'] == 'success'
+- result['total_products_processed'] == 0
+- result['total_sales_amount'] == 0
 
-TC004: Multiple Products Aggregation
-- Description: Test aggregation logic for multiple products
-- Input: start_date='2023-01-01', end_date='2023-03-31'
-- Expected Outcome: Sales are correctly aggregated by product_id
-- Test Data: Sales records for products P001, P002, P003 with multiple sales entries
-- Validation: Verify sum of sales per product matches expected totals
+## TEST CASE ID: TC_005
+**Test Case Description:** Test process_sales_data() with data outside date range
+**Test Category:** Edge Case - Date Filtering
+**Expected Outcome:** 
+- Function filters out data outside the specified date range
+- Returns success status with zero statistics
+- No data is processed or written
+**Test Data:** 
+- start_date: "2023-01-01"
+- end_date: "2023-01-31"
+- Sales data with dates in 2022 and 2024
+**Assertions:** 
+- result['status'] == 'success'
+- result['total_products_processed'] == 0
+- result['total_sales_amount'] == 0
 
-### 2. EDGE CASES
+## TEST CASE ID: TC_006
+**Test Case Description:** Test process_sales_data() with NULL sales values
+**Test Category:** Edge Case - NULL Handling
+**Expected Outcome:** 
+- Function handles NULL sales values correctly
+- NULL values are excluded from aggregation
+- Only non-NULL records are processed in detailed summary
+**Test Data:** Sales data with some NULL sales values
+**Assertions:** 
+- result['status'] == 'success'
+- Only non-NULL sales records are included in final count
+- total_sales_amount excludes NULL values
 
-TC005: Empty Sales Table
-- Description: Test behavior when sales_table is empty
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Function completes without errors, no records inserted
-- Test Data: Empty sales_table
-- Validation: Verify no exceptions thrown, target tables remain unchanged
+## TEST CASE ID: TC_007
+**Test Case Description:** Test process_sales_data() with duplicate product_ids
+**Test Category:** Happy Path - Aggregation Logic
+**Expected Outcome:** 
+- Function correctly aggregates sales for duplicate product_ids
+- Sum of sales is calculated properly for each product
+- No duplicate product_ids in final output
+**Test Data:** Sales data with multiple records for same product_id
+**Assertions:** 
+- result['status'] == 'success'
+- Aggregated sales values are correct
+- Number of unique products matches expected count
 
-TC006: No Records in Date Range
-- Description: Test when no sales records exist within specified date range
-- Input: start_date='2025-01-01', end_date='2025-12-31'
-- Expected Outcome: Function completes successfully with zero records processed
-- Test Data: Sales table with records only in 2023-2024
-- Validation: Verify no records inserted into target tables
+## TEST CASE ID: TC_008
+**Test Case Description:** Test process_sales_data() with boundary date values
+**Test Category:** Edge Case - Boundary Values
+**Expected Outcome:** 
+- Function correctly includes records on boundary dates
+- Start date and end date records are included
+- Boundary conditions work as expected
+**Test Data:** 
+- Sales data with records exactly on start_date and end_date
+- start_date: "2023-01-01"
+- end_date: "2023-01-31"
+**Assertions:** 
+- result['status'] == 'success'
+- Records with sale_date == start_date are included
+- Records with sale_date == end_date are included
 
-TC007: Null Sales Values
-- Description: Test handling of null values in sales column
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Null sales values are handled appropriately in aggregation
-- Test Data: Sales records with some null sales values
-- Validation: Verify null values don't break aggregation, filtered out from detailed_sales_summary
+## TEST CASE ID: TC_009
+**Test Case Description:** Test process_sales_data() with invalid date format
+**Test Category:** Error Handling - Invalid Input
+**Expected Outcome:** 
+- Function raises appropriate exception for invalid date format
+- Error is logged properly
+- Exception message is descriptive
+**Test Data:** 
+- start_date: "invalid-date"
+- end_date: "2023-12-31"
+**Assertions:** 
+- Exception is raised
+- Exception type is appropriate
+- Error message contains relevant information
 
-TC008: Duplicate Product Records
-- Description: Test aggregation when multiple records exist for same product
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Sales are correctly summed for duplicate product_ids
-- Test Data: Multiple sales records for same product_id
-- Validation: Verify total sales per product is sum of all individual sales
+## TEST CASE ID: TC_010
+**Test Case Description:** Test process_sales_data() with missing required columns
+**Test Category:** Error Handling - Schema Validation
+**Expected Outcome:** 
+- Function raises appropriate exception for missing columns
+- Error handling works correctly
+- Descriptive error message is provided
+**Test Data:** DataFrame missing 'sale_date' or 'product_id' columns
+**Assertions:** 
+- Exception is raised
+- Exception type is AnalysisException or similar
+- Error message indicates missing column
 
-TC009: Boundary Date Values
-- Description: Test with dates at exact boundary of available data
-- Input: start_date='2023-01-01', end_date='2023-01-01'
-- Expected Outcome: Records exactly matching boundary dates are included
-- Test Data: Sales records on 2023-01-01 and adjacent dates
-- Validation: Verify boundary date records are included in results
+## TEST CASE ID: TC_011
+**Test Case Description:** Test process_sales_data() with zero sales values
+**Test Category:** Edge Case - Zero Values
+**Expected Outcome:** 
+- Function handles zero sales values correctly
+- Zero values are included in aggregation
+- Records with zero sales are processed
+**Test Data:** Sales data with some zero sales values
+**Assertions:** 
+- result['status'] == 'success'
+- Zero sales values are included in processing
+- Aggregation includes zero values correctly
 
-TC010: Zero Sales Values
-- Description: Test handling of zero sales amounts
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Zero sales values are processed and included in results
-- Test Data: Sales records with sales amount = 0
-- Validation: Verify zero sales are included in aggregation results
+## TEST CASE ID: TC_012
+**Test Case Description:** Test process_sales_data() with negative sales values
+**Test Category:** Edge Case - Negative Values
+**Expected Outcome:** 
+- Function handles negative sales values correctly
+- Negative values are included in aggregation
+- Total sales amount reflects negative values
+**Test Data:** Sales data with some negative sales values
+**Assertions:** 
+- result['status'] == 'success'
+- Negative sales values are processed correctly
+- Total sales amount calculation includes negative values
 
-### 3. ERROR HANDLING SCENARIOS
+## TEST CASE ID: TC_013
+**Test Case Description:** Test process_sales_data() with very large dataset simulation
+**Test Category:** Performance - Large Data
+**Expected Outcome:** 
+- Function processes large dataset efficiently
+- Memory usage remains reasonable
+- Processing completes successfully
+**Test Data:** Large DataFrame with 10000+ records
+**Assertions:** 
+- result['status'] == 'success'
+- Processing time is reasonable
+- Memory usage is acceptable
 
-TC011: Invalid Date Format
-- Description: Test error handling for invalid date format
-- Input: start_date='invalid-date', end_date='2023-12-31'
-- Expected Outcome: Function handles invalid date gracefully with proper error logging
-- Test Data: Any valid sales table
-- Validation: Verify appropriate error is logged and exception handling works
+## TEST CASE ID: TC_014
+**Test Case Description:** Test process_sales_data_distributed() function - Happy Path
+**Test Category:** Happy Path - Distributed Processing
+**Expected Outcome:** 
+- Distributed function executes successfully
+- Returns success status with distributed processing mode
+- Avoids collect() operation
+**Test Data:** Standard sales data for distributed processing
+**Assertions:** 
+- result['status'] == 'success'
+- result['processing_mode'] == 'distributed'
 
-TC012: Start Date After End Date
-- Description: Test behavior when start_date is chronologically after end_date
-- Input: start_date='2023-12-31', end_date='2023-01-01'
-- Expected Outcome: Function handles logical date error appropriately
-- Test Data: Valid sales table
-- Validation: Verify no records processed or appropriate error handling
+## TEST CASE ID: TC_015
+**Test Case Description:** Test process_sales_data_distributed() with NULL values
+**Test Category:** Edge Case - Distributed NULL Handling
+**Expected Outcome:** 
+- Distributed function filters out NULL values correctly
+- Only non-NULL records are written to output
+- Processing completes successfully
+**Test Data:** Sales data with NULL total_sales values
+**Assertions:** 
+- result['status'] == 'success'
+- NULL values are filtered out
+- Only valid records are processed
 
-TC013: Missing Sales Table
-- Description: Test error handling when sales_table doesn't exist
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Function raises appropriate exception with error logging
-- Test Data: No sales_table available
-- Validation: Verify exception is caught and logged properly
+## TEST CASE ID: TC_016
+**Test Case Description:** Test main() function execution
+**Test Category:** Integration Test - Main Function
+**Expected Outcome:** 
+- Main function executes without errors
+- Spark session is created and stopped properly
+- Complete workflow runs successfully
+**Test Data:** Default test parameters
+**Assertions:** 
+- No exceptions are raised
+- Function completes execution
+- Spark session is properly cleaned up
 
-TC014: Target Table Write Failure
-- Description: Test error handling when target table write operations fail
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Function handles write failures with proper error logging
-- Test Data: Valid sales data but simulated write failure
-- Validation: Verify error is caught, logged, and exception is raised
+## TEST CASE ID: TC_017
+**Test Case Description:** Test DataFrame caching and unpersisting
+**Test Category:** Performance - Memory Management
+**Expected Outcome:** 
+- DataFrame is cached successfully
+- Cache is utilized during processing
+- DataFrame is unpersisted after use
+**Test Data:** Standard sales data
+**Assertions:** 
+- DataFrame caching works correctly
+- Memory is freed after unpersist
+- No memory leaks occur
 
-TC015: Spark Session Failure
-- Description: Test behavior when Spark session is not available
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Function handles Spark session issues appropriately
-- Test Data: Any test data
-- Validation: Verify proper error handling when Spark context is unavailable
+## TEST CASE ID: TC_018
+**Test Case Description:** Test date range validation edge cases
+**Test Category:** Edge Case - Date Validation
+**Expected Outcome:** 
+- Function handles edge cases in date ranges
+- Same start and end date works correctly
+- Future dates are handled properly
+**Test Data:** 
+- start_date: "2023-01-01"
+- end_date: "2023-01-01" (same date)
+**Assertions:** 
+- result['status'] == 'success'
+- Records with exact date match are processed
+- Date range validation works correctly
 
-### 4. UTILITY FUNCTION TESTS
+## TEST CASE ID: TC_019
+**Test Case Description:** Test error handling in main() function
+**Test Category:** Error Handling - Main Function
+**Expected Outcome:** 
+- Main function handles exceptions gracefully
+- Spark session is stopped even when errors occur
+- Proper error logging occurs
+**Test Data:** Invalid parameters causing exceptions
+**Assertions:** 
+- Exception is caught and handled
+- Spark session cleanup occurs in finally block
+- Error is logged appropriately
 
-TC016: Date Format Validation - Valid Dates
-- Description: Test validate_date_format function with valid date strings
-- Input: Various valid date strings ('2023-01-01', '2023-12-31', '2023-06-15')
-- Expected Outcome: Function returns True for all valid dates
-- Test Data: List of valid date format strings
-- Validation: Verify all valid dates return True
+## TEST CASE ID: TC_020
+**Test Case Description:** Test schema validation for detailed records
+**Test Category:** Data Quality - Schema Validation
+**Expected Outcome:** 
+- Detailed records schema is correctly defined
+- Data types are properly enforced
+- Schema validation works as expected
+**Test Data:** Records with various data types
+**Assertions:** 
+- Schema validation passes for valid data
+- Data types are correctly enforced
+- Invalid data types are handled appropriately
 
-TC017: Date Format Validation - Invalid Dates
-- Description: Test validate_date_format function with invalid date strings
-- Input: Invalid date strings ('invalid-date', '2023-13-01', '2023-01-32', '')
-- Expected Outcome: Function returns False for all invalid dates
-- Test Data: List of invalid date format strings
-- Validation: Verify all invalid dates return False
+=== SUMMARY ===
+Total Test Cases: 20
+Happy Path Tests: 6
+Edge Case Tests: 10
+Error Handling Tests: 4
+Integration Tests: 1
+Performance Tests: 2
+Data Quality Tests: 1
 
-TC018: Sales Summary Statistics - Valid Data
-- Description: Test get_sales_summary_stats function with valid sales data
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Function returns correct statistics dictionary
-- Test Data: Sales table with known totals
-- Validation: Verify returned statistics match expected calculations
-
-TC019: Sales Summary Statistics - Empty Result
-- Description: Test get_sales_summary_stats function when no data in range
-- Input: start_date='2025-01-01', end_date='2025-12-31'
-- Expected Outcome: Function returns statistics with zero/null values
-- Test Data: Sales table with no records in 2025
-- Validation: Verify statistics reflect empty result set
-
-TC020: Spark Configuration Setup
-- Description: Test configure_spark_for_sales_processing function
-- Input: Active Spark session
-- Expected Outcome: Spark configurations are set correctly
-- Test Data: Spark session instance
-- Validation: Verify all specified configurations are applied
-
-### 5. INTEGRATION TESTS
-
-TC021: End-to-End Processing Flow
-- Description: Test complete workflow from data read to final write
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Complete processing pipeline works correctly
-- Test Data: Complete sales dataset with multiple products and dates
-- Validation: Verify data flows correctly through all processing steps
-
-TC022: Caching Behavior Verification
-- Description: Test DataFrame caching and unpersisting behavior
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: DataFrames are cached and unpersisted correctly
-- Test Data: Sales data requiring caching
-- Validation: Verify cache operations improve performance and cleanup occurs
-
-TC023: Logging Functionality
-- Description: Test logging output at various stages of processing
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Appropriate log messages are generated
-- Test Data: Valid sales data
-- Validation: Verify log messages are generated at key processing points
-
-TC024: Multiple Execution Runs
-- Description: Test function behavior with multiple consecutive executions
-- Input: Multiple calls with different date ranges
-- Expected Outcome: Each execution works independently without interference
-- Test Data: Sales data covering multiple time periods
-- Validation: Verify no state interference between executions
-
-TC025: Performance Benchmarking
-- Description: Test function performance meets acceptable thresholds
-- Input: start_date='2023-01-01', end_date='2023-12-31'
-- Expected Outcome: Processing completes within acceptable time limits
-- Test Data: Large sales dataset (100K+ records)
-- Validation: Verify execution time is within performance requirements
-
-## TEST DATA REQUIREMENTS:
-
-### Sample Sales Table Schema:
-- product_id: String
-- sales: Float
-- sale_date: Date
-
-### Sample Test Data:
-```
-product_id | sales | sale_date
-P001       | 100.0 | 2023-01-15
-P001       | 150.0 | 2023-02-20
-P002       | 200.0 | 2023-01-10
-P002       | NULL  | 2023-03-15
-P003       | 0.0   | 2023-06-01
-P003       | 300.0 | 2023-07-15
-```
-
-### Target Tables Schema:
-#### summary_table:
-- product_id: String
-- total_sales: Float
-
-#### detailed_sales_summary:
-- product_id: String
-- total_sales: Float
-
-## COVERAGE SUMMARY:
-- Happy Path Scenarios: 4 test cases
-- Edge Cases: 6 test cases
-- Error Handling: 5 test cases
-- Utility Functions: 5 test cases
-- Integration Tests: 5 test cases
-- Total Test Cases: 25
-
-## TESTING PRIORITIES:
-1. High Priority: TC001, TC004, TC007, TC011, TC021 (Core functionality)
-2. Medium Priority: TC005, TC006, TC012, TC018, TC022 (Edge cases and utilities)
-3. Low Priority: TC025, TC020, TC023 (Performance and configuration)
+=== COVERAGE AREAS ===
+1. Spark Session Management
+2. Data Reading and Filtering
+3. Date Range Processing
+4. Aggregation Logic
+5. NULL Value Handling
+6. Caching and Memory Management
+7. Error Handling and Logging
+8. Schema Validation
+9. Distributed Processing
+10. Integration Workflow
