@@ -1,205 +1,198 @@
+# PySpark conversion of Hive Stored Procedure: process_sales_data
+# Converted from Hive SQL to PySpark DataFrame API
+# Author: Data Engineering Team
+# Date: Auto-generated conversion
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import sum as spark_sum, col, lit
-from pyspark.sql.types import *
+from pyspark.sql.types import StructType, StructField, StringType, FloatType
 import logging
 
 # Initialize Spark Session
-def get_spark_session(app_name="HiveStoredProcedureConversion"):
-    """
-    Initialize and return Spark Session
-    """
-    spark = SparkSession.builder \
-        .appName(app_name) \
-        .config("spark.sql.adaptive.enabled", "true") \
-        .config("spark.sql.adaptive.coalescePartitions.enabled", "true") \
-        .getOrCreate()
-    
-    spark.sparkContext.setLogLevel("WARN")
-    return spark
+spark = SparkSession.builder \
+    .appName("ProcessSalesData") \
+    .config("spark.sql.adaptive.enabled", "true") \
+    .config("spark.sql.adaptive.coalescePartitions.enabled", "true") \
+    .getOrCreate()
 
-def process_sales_data(spark, start_date, end_date, 
-                      sales_table_path, summary_table_path, 
-                      detailed_sales_summary_path):
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def process_sales_data(start_date: str, end_date: str):
     """
-    Convert Hive stored procedure logic to PySpark DataFrame operations
+    PySpark equivalent of Hive stored procedure process_sales_data
     
     Parameters:
-    - spark: SparkSession object
-    - start_date: Start date for filtering (STRING format)
-    - end_date: End date for filtering (STRING format)
-    - sales_table_path: Path to sales table
-    - summary_table_path: Path to summary table for output
-    - detailed_sales_summary_path: Path to detailed sales summary table
+    start_date (str): Start date for sales data filtering (format: 'YYYY-MM-DD')
+    end_date (str): End date for sales data filtering (format: 'YYYY-MM-DD')
+    
+    Returns:
+    None: Function performs data processing and writes to target tables
     """
     
     try:
-        # Step 1: Read sales table
-        print(f"Reading sales data from {sales_table_path}")
-        sales_df = spark.read.table(sales_table_path) if sales_table_path.count('/') == 0 else spark.read.parquet(sales_table_path)
+        logger.info(f"Starting sales data processing for period: {start_date} to {end_date}")
         
-        # Step 2: Filter data based on date range (equivalent to WHERE clause)
-        print(f"Filtering data between {start_date} and {end_date}")
+        # Step 1: Read source sales table
+        # Assuming sales_table exists as a Hive table or parquet files
+        sales_df = spark.table("sales_table")
+        
+        # Step 2: Filter sales data by date range
+        # Equivalent to: WHERE sale_date BETWEEN start_date AND end_date
         filtered_sales_df = sales_df.filter(
             (col("sale_date") >= lit(start_date)) & 
             (col("sale_date") <= lit(end_date))
         )
         
-        # Step 3: Create aggregated summary (equivalent to temp_sales_summary table)
-        print("Creating sales summary aggregation")
-        temp_sales_summary_df = filtered_sales_df \
-            .groupBy("product_id") \
+        # Step 3: Create aggregated sales summary
+        # Equivalent to: SELECT product_id, SUM(sales) AS total_sales GROUP BY product_id
+        sales_summary_df = filtered_sales_df.groupBy("product_id") \
             .agg(spark_sum("sales").alias("total_sales")) \
-            .select("product_id", "total_sales")
+            .orderBy("product_id")
         
-        # Cache the temporary result for reuse (equivalent to temporary table)
-        temp_sales_summary_df.cache()
+        # Cache the summary for multiple operations
+        sales_summary_df.cache()
         
-        # Step 4: Write to summary_table (equivalent to INSERT INTO summary_table)
-        print(f"Writing summary data to {summary_table_path}")
-        temp_sales_summary_df.write \
+        logger.info(f"Processed {sales_summary_df.count()} product summaries")
+        
+        # Step 4: Insert into summary_table (equivalent to dynamic query execution)
+        # This replaces the dynamic SQL generation and EXECUTE IMMEDIATE
+        sales_summary_df.write \
             .mode("append") \
-            .option("path", summary_table_path) \
-            .saveAsTable("summary_table") if summary_table_path.count('/') == 0 else \
-            temp_sales_summary_df.write.mode("append").parquet(summary_table_path)
+            .option("mergeSchema", "true") \
+            .saveAsTable("summary_table")
         
-        # Step 5: Process each record (equivalent to cursor logic)
-        print("Processing individual records for detailed summary")
+        logger.info("Successfully inserted data into summary_table")
         
-        # Collect data for processing (equivalent to cursor fetch)
-        # Note: Use collect() carefully - only for small datasets
-        # For large datasets, consider using foreachPartition() or other distributed operations
-        summary_records = temp_sales_summary_df.collect()
+        # Step 5: Create temporary view for detailed processing
+        # Equivalent to: CREATE TEMPORARY TABLE temp_sales_summary
+        sales_summary_df.createOrReplaceTempView("temp_sales_summary")
         
-        # Step 6: Create detailed records list (equivalent to cursor loop)
-        detailed_records = []
-        for row in summary_records:
-            if row['total_sales'] is not None:
-                detailed_records.append({
-                    'product_id': row['product_id'],
-                    'total_sales': row['total_sales']
-                })
+        # Step 6: Process each row for detailed summary (replaces cursor operations)
+        # In PySpark, we avoid row-by-row processing and use DataFrame operations instead
+        # This is more efficient than the original cursor-based approach
         
-        # Step 7: Convert to DataFrame and write to detailed_sales_summary
-        if detailed_records:
-            print(f"Writing detailed summary to {detailed_sales_summary_path}")
+        # Read existing detailed_sales_summary table structure or create if not exists
+        try:
+            existing_detailed_df = spark.table("detailed_sales_summary")
+            logger.info("Found existing detailed_sales_summary table")
+        except Exception:
+            # Create table structure if it doesn't exist
+            logger.info("Creating detailed_sales_summary table structure")
             
-            # Define schema for detailed sales summary
-            detailed_schema = StructType([
-                StructField("product_id", StringType(), True),
-                StructField("total_sales", FloatType(), True)
-            ])
-            
-            detailed_df = spark.createDataFrame(detailed_records, detailed_schema)
-            
-            # Write detailed summary (equivalent to INSERT INTO detailed_sales_summary)
-            detailed_df.write \
-                .mode("append") \
-                .option("path", detailed_sales_summary_path) \
-                .saveAsTable("detailed_sales_summary") if detailed_sales_summary_path.count('/') == 0 else \
-                detailed_df.write.mode("append").parquet(detailed_sales_summary_path)
-        
-        # Step 8: Unpersist cached DataFrame (equivalent to DROP TABLE temp_sales_summary)
-        temp_sales_summary_df.unpersist()
-        
-        print("Sales data processing completed successfully")
-        
-        # Return summary statistics
-        total_products = len(detailed_records)
-        total_sales_amount = sum([record['total_sales'] for record in detailed_records])
-        
-        return {
-            'status': 'success',
-            'total_products_processed': total_products,
-            'total_sales_amount': total_sales_amount,
-            'date_range': f"{start_date} to {end_date}"
-        }
-        
-    except Exception as e:
-        print(f"Error processing sales data: {str(e)}")
-        logging.error(f"Error in process_sales_data: {str(e)}")
-        raise e
-
-def main():
-    """
-    Main execution function - equivalent to stored procedure call
-    """
-    # Initialize Spark Session
-    spark = get_spark_session()
-    
-    try:
-        # Example usage - replace with actual parameters
-        start_date = "2023-01-01"
-        end_date = "2023-12-31"
-        
-        # Define table paths (adjust based on your environment)
-        sales_table_path = "sales_table"  # or "/path/to/sales_table.parquet"
-        summary_table_path = "summary_table"  # or "/path/to/summary_table.parquet"
-        detailed_sales_summary_path = "detailed_sales_summary"  # or "/path/to/detailed_sales_summary.parquet"
-        
-        # Execute the conversion logic
-        result = process_sales_data(
-            spark=spark,
-            start_date=start_date,
-            end_date=end_date,
-            sales_table_path=sales_table_path,
-            summary_table_path=summary_table_path,
-            detailed_sales_summary_path=detailed_sales_summary_path
+        # Step 7: Insert all records into detailed_sales_summary in batch
+        # This replaces the cursor-based row-by-row insertion
+        # Much more efficient than the original WHILE loop approach
+        detailed_summary_df = sales_summary_df.select(
+            col("product_id"),
+            col("total_sales")
         )
         
-        print(f"Processing Result: {result}")
-        
-    except Exception as e:
-        print(f"Error in main execution: {str(e)}")
-        raise e
-    finally:
-        # Stop Spark Session
-        spark.stop()
-
-if __name__ == "__main__":
-    main()
-
-# Alternative approach for large datasets (avoiding collect())
-def process_sales_data_distributed(spark, start_date, end_date, 
-                                 sales_table_path, summary_table_path, 
-                                 detailed_sales_summary_path):
-    """
-    Distributed version that avoids collect() for large datasets
-    """
-    try:
-        # Steps 1-3: Same as above
-        sales_df = spark.read.table(sales_table_path) if sales_table_path.count('/') == 0 else spark.read.parquet(sales_table_path)
-        
-        filtered_sales_df = sales_df.filter(
-            (col("sale_date") >= lit(start_date)) & 
-            (col("sale_date") <= lit(end_date))
-        )
-        
-        temp_sales_summary_df = filtered_sales_df \
-            .groupBy("product_id") \
-            .agg(spark_sum("sales").alias("total_sales")) \
-            .select("product_id", "total_sales")
-        
-        # Step 4: Write to summary table
-        temp_sales_summary_df.write \
-            .mode("append") \
-            .option("path", summary_table_path) \
-            .saveAsTable("summary_table") if summary_table_path.count('/') == 0 else \
-            temp_sales_summary_df.write.mode("append").parquet(summary_table_path)
-        
-        # Step 5: Filter out null values and write directly (more efficient for large datasets)
-        detailed_summary_df = temp_sales_summary_df.filter(col("total_sales").isNotNull())
-        
-        # Step 6: Write to detailed sales summary
+        # Write to detailed_sales_summary table
         detailed_summary_df.write \
             .mode("append") \
-            .option("path", detailed_sales_summary_path) \
-            .saveAsTable("detailed_sales_summary") if detailed_sales_summary_path.count('/') == 0 else \
-            detailed_summary_df.write.mode("append").parquet(detailed_sales_summary_path)
+            .option("mergeSchema", "true") \
+            .saveAsTable("detailed_sales_summary")
         
-        print("Distributed sales data processing completed successfully")
+        logger.info("Successfully inserted data into detailed_sales_summary")
         
-        return {'status': 'success', 'processing_mode': 'distributed'}
+        # Step 8: Cleanup - unpersist cached DataFrame
+        # Equivalent to: DROP TABLE temp_sales_summary
+        sales_summary_df.unpersist()
+        spark.catalog.dropTempView("temp_sales_summary")
+        
+        logger.info("Sales data processing completed successfully")
         
     except Exception as e:
-        print(f"Error in distributed processing: {str(e)}")
+        logger.error(f"Error in process_sales_data: {str(e)}")
         raise e
+
+def process_sales_data_with_validation(start_date: str, end_date: str):
+    """
+    Enhanced version with data validation and error handling
+    """
+    
+    # Input validation
+    if not start_date or not end_date:
+        raise ValueError("Start date and end date must be provided")
+    
+    if start_date > end_date:
+        raise ValueError("Start date must be less than or equal to end date")
+    
+    # Execute main processing
+    process_sales_data(start_date, end_date)
+
+# Alternative implementation using SQL for teams preferring SQL syntax
+def process_sales_data_sql_approach(start_date: str, end_date: str):
+    """
+    Alternative implementation using Spark SQL for teams more comfortable with SQL
+    """
+    
+    try:
+        logger.info(f"Starting SQL-based sales data processing for period: {start_date} to {end_date}")
+        
+        # Create summary and insert into summary_table
+        spark.sql(f"""
+            INSERT INTO summary_table
+            SELECT product_id, SUM(sales) AS total_sales
+            FROM sales_table 
+            WHERE sale_date BETWEEN '{start_date}' AND '{end_date}'
+            GROUP BY product_id
+        """)
+        
+        # Create temporary view
+        spark.sql(f"""
+            CREATE OR REPLACE TEMPORARY VIEW temp_sales_summary AS
+            SELECT product_id, SUM(sales) AS total_sales
+            FROM sales_table
+            WHERE sale_date BETWEEN '{start_date}' AND '{end_date}'
+            GROUP BY product_id
+        """)
+        
+        # Insert into detailed summary (batch operation instead of cursor)
+        spark.sql("""
+            INSERT INTO detailed_sales_summary (product_id, total_sales)
+            SELECT product_id, total_sales
+            FROM temp_sales_summary
+        """)
+        
+        # Cleanup
+        spark.sql("DROP VIEW IF EXISTS temp_sales_summary")
+        
+        logger.info("SQL-based sales data processing completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Error in SQL-based process_sales_data: {str(e)}")
+        raise e
+
+# Main execution function
+if __name__ == "__main__":
+    # Example usage
+    start_date = "2024-01-01"
+    end_date = "2024-01-31"
+    
+    # Choose implementation approach
+    # Option 1: DataFrame API approach (recommended for better performance)
+    process_sales_data_with_validation(start_date, end_date)
+    
+    # Option 2: SQL approach (uncomment if preferred)
+    # process_sales_data_sql_approach(start_date, end_date)
+    
+    # Stop Spark session
+    spark.stop()
+
+# Performance optimization notes:
+# 1. Replaced cursor-based row-by-row processing with batch DataFrame operations
+# 2. Added caching for DataFrames used multiple times
+# 3. Used adaptive query execution for better performance
+# 4. Implemented proper error handling and logging
+# 5. Added input validation
+# 6. Provided both DataFrame API and SQL approaches for flexibility
+
+# Key transformations applied:
+# - Dynamic SQL -> Static DataFrame operations with parameters
+# - CURSOR operations -> Batch DataFrame transformations
+# - Row-by-row INSERT -> Bulk DataFrame write operations
+# - Temporary tables -> Temporary views with proper cleanup
+# - Procedural logic -> Functional programming approach
