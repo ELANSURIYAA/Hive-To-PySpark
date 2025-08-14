@@ -1,0 +1,518 @@
+# HIVE TO PYSPARK CONVERSION RECONCILIATION TEST CASES - VERSION 2
+# Generated for: Hive_Stored_Procedure.txt to PySpark Conversion Validation
+# Date: Enhanced reconciliation testing for data consistency and completeness
+# Total Test Cases: 35
+# Focus: Data reconciliation, syntax validation, and performance comparison
+
+===========================================
+CONVERSION ANALYSIS SUMMARY
+===========================================
+
+Original HiveQL Stored Procedure Analysis:
+- Procedure Name: process_sales_data
+- Input Parameters: start_date (STRING), end_date (STRING)
+- Key Operations: Dynamic SQL execution, temporary table creation, cursor-based processing
+- Data Flow: sales_table → filtering → aggregation → summary_table + detailed_sales_summary
+
+Converted PySpark Implementation Analysis:
+- Function Name: process_sales_data
+- Input Parameters: start_date (str), end_date (str)
+- Key Operations: DataFrame filtering, groupBy aggregation, bulk write operations
+- Data Flow: sales_table → filter() → groupBy().agg() → write().insertInto()
+
+===========================================
+SYNTAX TRANSFORMATION VALIDATION
+===========================================
+
+TC_001: Stored Procedure Declaration Conversion
+Test Case ID: TC_001
+Test Case Description: Validate conversion from Hive CREATE PROCEDURE to Python function definition
+Hive Original: CREATE PROCEDURE process_sales_data(IN start_date STRING, IN end_date STRING)
+PySpark Converted: def process_sales_data(start_date, end_date):
+Expected Outcome: Function accepts string parameters and maintains same input/output contract
+Validation Points:
+- Function is callable with two string parameters
+- Parameter names match original procedure
+- Function returns boolean success indicator
+- No Hive-specific syntax remains
+Traceability: Line 1-3 (Hive) → Function definition (PySpark)
+
+TC_002: Dynamic SQL Elimination Validation
+Test Case ID: TC_002
+Test Case Description: Validate replacement of CONCAT + EXECUTE IMMEDIATE with direct DataFrame operations
+Hive Original: SET @dynamic_query = CONCAT("INSERT INTO summary_table SELECT product_id, SUM(sales)..."); EXECUTE IMMEDIATE @dynamic_query;
+PySpark Converted: temp_sales_summary_df.write.mode("append").insertInto("summary_table")
+Expected Outcome: Direct DataFrame operations produce identical results to dynamic SQL
+Validation Points:
+- No string concatenation for SQL generation
+- No EXECUTE IMMEDIATE equivalent
+- Direct DataFrame write operations
+- Same data inserted into summary_table
+Traceability: Lines 5-9 (Hive) → DataFrame write operations (PySpark)
+
+TC_003: Date Range Filtering Conversion
+Test Case ID: TC_003
+Test Case Description: Validate BETWEEN clause conversion to DataFrame filter operations
+Hive Original: WHERE sale_date BETWEEN start_date AND end_date
+PySpark Converted: filter((col("sale_date") >= lit(start_date)) & (col("sale_date") <= lit(end_date)))
+Expected Outcome: Identical records filtered in both implementations
+Validation Points:
+- Same date range logic (inclusive boundaries)
+- Proper handling of date string comparisons
+- No records outside date range included
+- Edge case handling for boundary dates
+Traceability: WHERE clauses (Hive) → filter() operations (PySpark)
+
+TC_004: Aggregation Function Conversion
+Test Case ID: TC_004
+Test Case Description: Validate SUM() function conversion from Hive to PySpark
+Hive Original: SUM(sales) AS total_sales GROUP BY product_id
+PySpark Converted: groupBy("product_id").agg(spark_sum("sales").alias("total_sales"))
+Expected Outcome: Identical aggregation results for all product IDs
+Validation Points:
+- Same sum calculations per product_id
+- Proper null handling in aggregations
+- Alias names match (total_sales)
+- Grouping produces same number of groups
+Traceability: GROUP BY + SUM (Hive) → groupBy().agg() (PySpark)
+
+TC_005: Temporary Table to Cached DataFrame Conversion
+Test Case ID: TC_005
+Test Case Description: Validate CREATE TEMPORARY TABLE replacement with cached DataFrame
+Hive Original: CREATE TEMPORARY TABLE temp_sales_summary AS SELECT...
+PySpark Converted: temp_sales_summary_df = filtered_sales_df.groupBy().agg().cache()
+Expected Outcome: Cached DataFrame contains same data as temporary table would
+Validation Points:
+- DataFrame is properly cached for reuse
+- Same data structure and content
+- Performance benefit from caching
+- Memory management through cache()
+Traceability: Lines 11-15 (Hive) → Cached DataFrame (PySpark)
+
+TC_006: Cursor Operations to Bulk Processing Conversion
+Test Case ID: TC_006
+Test Case Description: Validate elimination of cursor-based row processing with bulk operations
+Hive Original: DECLARE cur CURSOR FOR...; OPEN cur; FETCH cur INTO...; WHILE...DO...INSERT
+PySpark Converted: detailed_summary_df.write.mode("append").insertInto("detailed_sales_summary")
+Expected Outcome: Bulk operations produce same final results as cursor processing
+Validation Points:
+- All records processed (no missing data)
+- Same number of records inserted
+- Identical data in detailed_sales_summary
+- Better performance than row-by-row processing
+Traceability: Lines 17-26 (Hive) → Bulk write operations (PySpark)
+
+TC_007: Variable Declaration Handling
+Test Case ID: TC_007
+Test Case Description: Validate handling of Hive DECLARE statements in Python context
+Hive Original: DECLARE total_sales FLOAT;
+PySpark Converted: Implicit variable handling within DataFrame operations
+Expected Outcome: Variable semantics maintained without explicit declarations
+Validation Points:
+- No explicit variable declarations needed
+- Data types handled implicitly by Spark
+- Same variable usage patterns
+- Proper null handling
+Traceability: Line 4 (Hive) → Implicit handling (PySpark)
+
+TC_008: Resource Cleanup Conversion
+Test Case ID: TC_008
+Test Case Description: Validate DROP TABLE conversion to DataFrame unpersist operations
+Hive Original: DROP TABLE temp_sales_summary;
+PySpark Converted: temp_sales_summary_df.unpersist()
+Expected Outcome: Proper memory cleanup and resource management
+Validation Points:
+- Memory resources properly released
+- No memory leaks
+- Cache cleanup executed
+- Performance impact measured
+Traceability: Line 28 (Hive) → unpersist() call (PySpark)
+
+===========================================
+DATA RECONCILIATION TEST CASES
+===========================================
+
+TC_009: Complete Data Flow Reconciliation
+Test Case ID: TC_009
+Test Case Description: End-to-end validation that both implementations produce identical results
+Test Data: Comprehensive sales dataset with multiple products, date ranges, and edge cases
+Expected Outcome: 100% data consistency between Hive and PySpark implementations
+Validation Points:
+- Identical row counts in summary_table
+- Identical row counts in detailed_sales_summary
+- Same aggregated values for each product_id
+- Same data types and precision
+Reconciliation Method: Row-by-row comparison of final tables
+
+TC_010: Null Value Handling Reconciliation
+Test Case ID: TC_010
+Test Case Description: Validate consistent null handling between Hive and PySpark
+Test Data: Dataset with null values in sales column, product_id, and sale_date
+Expected Outcome: Identical null handling behavior in both implementations
+Validation Points:
+- Same treatment of null sales values in SUM()
+- Same filtering behavior for null dates
+- Same grouping behavior with null product_ids
+- Consistent null propagation rules
+Reconciliation Method: Compare null handling patterns and final results
+
+TC_011: Large Dataset Performance Reconciliation
+Test Case ID: TC_011
+Test Case Description: Compare performance characteristics between Hive and PySpark implementations
+Test Data: Large dataset (1M+ records) with realistic data distribution
+Expected Outcome: PySpark implementation meets or exceeds Hive performance
+Validation Points:
+- Processing time comparison
+- Memory usage patterns
+- Resource utilization efficiency
+- Scalability characteristics
+Reconciliation Method: Performance benchmarking and resource monitoring
+
+TC_012: Date Boundary Reconciliation
+Test Case ID: TC_012
+Test Case Description: Validate identical behavior for date boundary conditions
+Test Data: Records with dates exactly matching start_date and end_date boundaries
+Expected Outcome: Identical inclusion/exclusion of boundary records
+Validation Points:
+- Records with sale_date = start_date included
+- Records with sale_date = end_date included
+- Records outside range properly excluded
+- Consistent date comparison logic
+Reconciliation Method: Boundary condition testing with known datasets
+
+TC_013: Aggregation Precision Reconciliation
+Test Case ID: TC_013
+Test Case Description: Validate numerical precision consistency in aggregation operations
+Test Data: Dataset with high-precision decimal values and large numbers
+Expected Outcome: Identical aggregation results within acceptable precision tolerance
+Validation Points:
+- Same sum calculations (within floating-point precision)
+- Consistent rounding behavior
+- Same handling of very large numbers
+- Same handling of very small numbers
+Reconciliation Method: Numerical comparison with precision tolerance
+
+TC_014: Duplicate Record Handling Reconciliation
+Test Case ID: TC_014
+Test Case Description: Validate consistent handling of duplicate records
+Test Data: Dataset with duplicate product_id and sale_date combinations
+Expected Outcome: Identical aggregation of duplicate records
+Validation Points:
+- Same grouping behavior for duplicates
+- Same sum calculations for duplicate groups
+- Same final record counts
+- Consistent duplicate elimination (if any)
+Reconciliation Method: Compare aggregation results for datasets with known duplicates
+
+===========================================
+ERROR HANDLING AND EDGE CASES
+===========================================
+
+TC_015: Empty Dataset Handling
+Test Case ID: TC_015
+Test Case Description: Validate behavior when source sales_table is empty
+Test Scenario: Execute both implementations with empty sales_table
+Expected Outcome: Both implementations complete successfully with empty results
+Validation Points:
+- No exceptions or errors raised
+- Empty results in target tables
+- Proper handling of empty aggregations
+- Consistent return values/status
+
+TC_016: Missing Table Error Handling
+Test Case ID: TC_016
+Test Case Description: Validate error handling when source table doesn't exist
+Test Scenario: Execute both implementations when sales_table is missing
+Expected Outcome: Both implementations handle missing table gracefully
+Validation Points:
+- Appropriate error messages
+- No unhandled exceptions
+- Consistent error handling behavior
+- Proper cleanup on error
+
+TC_017: Invalid Date Format Handling
+Test Case ID: TC_017
+Test Case Description: Validate handling of invalid date formats in parameters
+Test Scenario: Execute with various invalid date format inputs
+Expected Outcome: Both implementations handle invalid dates consistently
+Validation Points:
+- Same validation behavior for invalid dates
+- Consistent error messages or handling
+- No data corruption from invalid dates
+- Proper parameter validation
+
+TC_018: Memory Constraint Handling
+Test Case ID: TC_018
+Test Case Description: Validate behavior under memory pressure conditions
+Test Scenario: Execute with very large datasets that stress memory limits
+Expected Outcome: PySpark implementation handles memory more efficiently
+Validation Points:
+- No out-of-memory errors in PySpark
+- Efficient memory usage patterns
+- Proper cache management
+- Graceful degradation under pressure
+
+TC_019: Concurrent Execution Handling
+Test Case ID: TC_019
+Test Case Description: Validate behavior under concurrent execution scenarios
+Test Scenario: Execute multiple instances simultaneously with different parameters
+Expected Outcome: Both implementations handle concurrency appropriately
+Validation Points:
+- No race conditions
+- Data integrity maintained
+- Consistent results across concurrent runs
+- Proper resource isolation
+
+===========================================
+PERFORMANCE AND OPTIMIZATION VALIDATION
+===========================================
+
+TC_020: Caching Performance Validation
+Test Case ID: TC_020
+Test Case Description: Validate performance benefits of DataFrame caching vs temporary tables
+Test Scenario: Measure performance with and without caching in PySpark
+Expected Outcome: Caching provides measurable performance improvement
+Validation Points:
+- Faster subsequent access to cached data
+- Reduced I/O operations
+- Better memory utilization
+- Improved overall processing time
+
+TC_021: Adaptive Query Execution Validation
+Test Case ID: TC_021
+Test Case Description: Validate benefits of Spark's adaptive query execution features
+Test Scenario: Execute with AQE enabled vs disabled
+Expected Outcome: AQE provides performance improvements for complex queries
+Validation Points:
+- Optimized join strategies
+- Dynamic partition coalescing
+- Improved resource utilization
+- Better handling of data skew
+
+TC_022: Partitioning Strategy Validation
+Test Case ID: TC_022
+Test Case Description: Validate optimal partitioning strategies for date-based filtering
+Test Scenario: Test with different partitioning schemes
+Expected Outcome: Date-based partitioning improves filter performance
+Validation Points:
+- Faster date range queries
+- Reduced data scanning
+- Better partition pruning
+- Improved parallel processing
+
+TC_023: Memory Management Validation
+Test Case ID: TC_023
+Test Case Description: Validate efficient memory usage and cleanup patterns
+Test Scenario: Monitor memory usage throughout processing lifecycle
+Expected Outcome: Efficient memory allocation and cleanup
+Validation Points:
+- No memory leaks
+- Proper cache eviction
+- Efficient garbage collection
+- Stable memory usage patterns
+
+===========================================
+INTEGRATION AND COMPATIBILITY TESTS
+===========================================
+
+TC_024: Schema Evolution Compatibility
+Test Case ID: TC_024
+Test Case Description: Validate handling of schema changes in source tables
+Test Scenario: Execute with slightly modified table schemas
+Expected Outcome: Robust handling of schema variations
+Validation Points:
+- Graceful handling of new columns
+- Proper handling of missing columns
+- Consistent behavior with schema changes
+- Backward compatibility maintained
+
+TC_025: Data Type Compatibility
+Test Case ID: TC_025
+Test Case Description: Validate consistent data type handling between Hive and Spark
+Test Scenario: Test with various data types (STRING, INT, FLOAT, DATE, etc.)
+Expected Outcome: Consistent data type behavior across implementations
+Validation Points:
+- Same data type conversions
+- Consistent precision handling
+- Same null representation
+- Compatible serialization formats
+
+TC_026: Timezone Handling Compatibility
+Test Case ID: TC_026
+Test Case Description: Validate consistent timezone handling in date operations
+Test Scenario: Test with dates in different timezones
+Expected Outcome: Consistent timezone behavior
+Validation Points:
+- Same timezone interpretation
+- Consistent date comparisons
+- Proper UTC handling
+- Same daylight saving time behavior
+
+TC_027: Character Encoding Compatibility
+Test Case ID: TC_027
+Test Case Description: Validate consistent character encoding handling
+Test Scenario: Test with various character encodings and special characters
+Expected Outcome: Consistent character handling
+Validation Points:
+- Same UTF-8 handling
+- Consistent special character processing
+- Same string comparison behavior
+- Proper encoding preservation
+
+===========================================
+DATA QUALITY AND VALIDATION TESTS
+===========================================
+
+TC_028: Data Completeness Validation
+Test Case ID: TC_028
+Test Case Description: Validate that no data is lost during conversion processing
+Test Scenario: Process known dataset and verify complete data lineage
+Expected Outcome: 100% data completeness with no loss
+Validation Points:
+- All input records accounted for
+- No missing aggregations
+- Complete audit trail
+- Referential integrity maintained
+
+TC_029: Data Accuracy Validation
+Test Case ID: TC_029
+Test Case Description: Validate mathematical accuracy of all calculations
+Test Scenario: Process dataset with known expected results
+Expected Outcome: 100% calculation accuracy
+Validation Points:
+- Correct sum calculations
+- Accurate aggregation results
+- Proper decimal precision
+- Consistent rounding behavior
+
+TC_030: Data Consistency Validation
+Test Case ID: TC_030
+Test Case Description: Validate data consistency across multiple execution runs
+Test Scenario: Execute same processing multiple times with identical inputs
+Expected Outcome: Identical results across all runs
+Validation Points:
+- Deterministic processing results
+- No random variations
+- Consistent ordering (where applicable)
+- Stable performance characteristics
+
+===========================================
+REGRESSION AND MAINTENANCE TESTS
+===========================================
+
+TC_031: Backward Compatibility Validation
+Test Case ID: TC_031
+Test Case Description: Validate that PySpark implementation maintains compatibility with existing systems
+Test Scenario: Test integration with downstream systems expecting Hive output format
+Expected Outcome: Seamless integration with existing systems
+Validation Points:
+- Same output table schemas
+- Compatible data formats
+- Same column names and types
+- Consistent metadata
+
+TC_032: Version Upgrade Validation
+Test Case ID: TC_032
+Test Case Description: Validate behavior across different Spark versions
+Test Scenario: Test implementation across multiple Spark versions
+Expected Outcome: Consistent behavior across supported versions
+Validation Points:
+- Same results across versions
+- Compatible API usage
+- No deprecated function usage
+- Forward compatibility maintained
+
+TC_033: Configuration Sensitivity Validation
+Test Case ID: TC_033
+Test Case Description: Validate sensitivity to Spark configuration changes
+Test Scenario: Test with various Spark configuration settings
+Expected Outcome: Robust behavior across different configurations
+Validation Points:
+- Consistent results with different configs
+- Graceful handling of config changes
+- Optimal performance with recommended configs
+- No config-dependent failures
+
+TC_034: Resource Scaling Validation
+Test Case ID: TC_034
+Test Case Description: Validate behavior across different cluster sizes and resource allocations
+Test Scenario: Test with various cluster configurations
+Expected Outcome: Scalable performance across different resource levels
+Validation Points:
+- Linear scaling with resources
+- Efficient resource utilization
+- No resource-dependent failures
+- Optimal performance at different scales
+
+TC_035: Monitoring and Observability Validation
+Test Case ID: TC_035
+Test Case Description: Validate comprehensive monitoring and logging capabilities
+Test Scenario: Execute processing while monitoring all metrics and logs
+Expected Outcome: Complete observability into processing behavior
+Validation Points:
+- Comprehensive log coverage
+- Useful performance metrics
+- Effective error reporting
+- Actionable monitoring data
+
+===========================================
+MANUAL INTERVENTION RECOMMENDATIONS
+===========================================
+
+1. PERFORMANCE OPTIMIZATION INTERVENTIONS:
+   - Implement broadcast joins for small lookup tables
+   - Configure optimal partition sizes based on data volume
+   - Tune Spark SQL adaptive query execution parameters
+   - Implement custom partitioning strategies for large datasets
+
+2. ERROR HANDLING ENHANCEMENTS:
+   - Add comprehensive input validation for date parameters
+   - Implement retry logic for transient failures
+   - Add circuit breaker patterns for external dependencies
+   - Enhance error logging with structured logging formats
+
+3. DATA QUALITY IMPROVEMENTS:
+   - Implement schema validation for input DataFrames
+   - Add data profiling and quality checks
+   - Implement anomaly detection for unusual data patterns
+   - Add data lineage tracking for audit purposes
+
+4. OPERATIONAL ENHANCEMENTS:
+   - Implement comprehensive monitoring and alerting
+   - Add performance benchmarking and regression detection
+   - Implement automated testing pipelines
+   - Add capacity planning and resource optimization
+
+===========================================
+TEST EXECUTION SUMMARY
+===========================================
+
+Total Test Cases: 35
+Category Breakdown:
+- Syntax Transformation Validation: 8 test cases (TC_001-TC_008)
+- Data Reconciliation: 6 test cases (TC_009-TC_014)
+- Error Handling and Edge Cases: 5 test cases (TC_015-TC_019)
+- Performance and Optimization: 4 test cases (TC_020-TC_023)
+- Integration and Compatibility: 4 test cases (TC_024-TC_027)
+- Data Quality and Validation: 3 test cases (TC_028-TC_030)
+- Regression and Maintenance: 5 test cases (TC_031-TC_035)
+
+Execution Priority:
+1. Critical: TC_001-TC_008, TC_009, TC_028-TC_030 (Core functionality and data quality)
+2. High: TC_010-TC_014, TC_015-TC_019 (Data reconciliation and error handling)
+3. Medium: TC_020-TC_027 (Performance and compatibility)
+4. Low: TC_031-TC_035 (Regression and maintenance)
+
+Success Criteria:
+- 100% pass rate for syntax transformation tests
+- 100% data reconciliation accuracy
+- Zero data loss or corruption
+- Performance meets or exceeds Hive baseline
+- All error conditions handled gracefully
+
+Recommended Test Environment:
+- Spark cluster with minimum 3 nodes
+- Access to both Hive and PySpark environments
+- Comprehensive test datasets (small, medium, large scale)
+- Performance monitoring and profiling tools
+- Automated test execution framework
