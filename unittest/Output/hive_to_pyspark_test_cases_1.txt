@@ -1,0 +1,334 @@
+# HIVE TO PYSPARK CONVERSION TEST CASES - VERSION 1
+# Generated for: Hive_Stored_Procedure.txt to PySpark Conversion
+# Date: 2024
+
+## SYNTAX CHANGES DETECTED:
+
+### 1. STORED PROCEDURE CONVERSION
+- **Original HiveQL**: CREATE PROCEDURE process_sales_data(IN start_date STRING, IN end_date STRING)
+- **Converted PySpark**: Python function def process_sales_data(start_date, end_date)
+- **Change Type**: Procedural to functional programming paradigm
+
+### 2. DYNAMIC SQL CONVERSION
+- **Original HiveQL**: SET @dynamic_query = CONCAT(...); EXECUTE IMMEDIATE @dynamic_query;
+- **Converted PySpark**: Direct DataFrame operations with filter() and groupBy()
+- **Change Type**: Dynamic SQL to DataFrame API
+
+### 3. TEMPORARY TABLE CONVERSION
+- **Original HiveQL**: CREATE TEMPORARY TABLE temp_sales_summary AS SELECT...
+- **Converted PySpark**: createOrReplaceTempView("temp_sales_summary")
+- **Change Type**: SQL DDL to DataFrame temporary view
+
+### 4. CURSOR OPERATIONS CONVERSION
+- **Original HiveQL**: DECLARE cur CURSOR FOR...; OPEN cur; FETCH cur INTO...
+- **Converted PySpark**: DataFrame.collect() and Python iteration
+- **Change Type**: SQL cursor to DataFrame collection
+
+### 5. AGGREGATE FUNCTIONS CONVERSION
+- **Original HiveQL**: SUM(sales) AS total_sales
+- **Converted PySpark**: spark_sum("sales").alias("total_sales")
+- **Change Type**: SQL function to PySpark function import
+
+### 6. CONDITIONAL LOGIC CONVERSION
+- **Original HiveQL**: WHILE total_sales IS NOT NULL DO
+- **Converted PySpark**: Python if conditions and for loops
+- **Change Type**: SQL control flow to Python control flow
+
+### 7. DATA TYPE HANDLING
+- **Original HiveQL**: STRING, FLOAT data types in procedure parameters
+- **Converted PySpark**: StringType(), FloatType() in StructType schema definitions
+- **Change Type**: SQL data types to PySpark data types
+
+### 8. TABLE OPERATIONS CONVERSION
+- **Original HiveQL**: INSERT INTO summary_table, DROP TABLE temp_sales_summary
+- **Converted PySpark**: DataFrame.write.saveAsTable(), spark.catalog.dropTempView()
+- **Change Type**: SQL DML to DataFrame write operations
+
+## RECOMMENDED MANUAL INTERVENTIONS:
+
+### 1. PERFORMANCE OPTIMIZATIONS
+- **Intervention**: Add DataFrame caching for reused DataFrames
+- **Implementation**: summary_df.cache() and summary_df.unpersist()
+- **Reason**: Improve performance for multiple DataFrame operations
+
+### 2. ERROR HANDLING ENHANCEMENT
+- **Intervention**: Add comprehensive try-catch blocks and logging
+- **Implementation**: Python exception handling with logging framework
+- **Reason**: Better error management and debugging capabilities
+
+### 3. RESOURCE MANAGEMENT
+- **Intervention**: Proper SparkSession management and cleanup
+- **Implementation**: SparkSession.builder configuration and spark.stop()
+- **Reason**: Prevent resource leaks and optimize cluster usage
+
+### 4. DATA VALIDATION
+- **Intervention**: Add input parameter validation
+- **Implementation**: Date format validation and data existence checks
+- **Reason**: Ensure data quality and prevent runtime errors
+
+### 5. SCALABILITY CONSIDERATIONS
+- **Intervention**: Replace collect() with DataFrame operations for large datasets
+- **Implementation**: Use DataFrame write operations instead of collect() + iteration
+- **Reason**: Avoid memory issues with large datasets
+
+### 6. CONFIGURATION OPTIMIZATION
+- **Intervention**: Add Spark configuration tuning
+- **Implementation**: Adaptive query execution and partition coalescing
+- **Reason**: Optimize performance based on data characteristics
+
+## COMPREHENSIVE TEST CASES:
+
+### TC001: Basic Stored Procedure Conversion Test
+**Test Case ID**: TC001
+**Test Case Description**: Verify that the HiveQL stored procedure is correctly converted to a PySpark function with proper parameter handling
+**Expected Outcome**: Function accepts start_date and end_date parameters and executes without syntax errors
+**Test Type**: Syntax Conversion
+**Priority**: High
+
+### TC002: Dynamic SQL to DataFrame Conversion Test
+**Test Case ID**: TC002
+**Test Case Description**: Verify that dynamic SQL query generation is replaced with DataFrame filter and groupBy operations
+**Expected Outcome**: DataFrame operations produce same results as original dynamic SQL query
+**Test Type**: Logic Conversion
+**Priority**: High
+
+### TC003: Temporary Table to TempView Conversion Test
+**Test Case ID**: TC003
+**Test Case Description**: Verify that CREATE TEMPORARY TABLE is correctly converted to createOrReplaceTempView
+**Expected Outcome**: Temporary view is created and accessible for subsequent operations
+**Test Type**: DDL Conversion
+**Priority**: High
+
+### TC004: Cursor to DataFrame Collection Conversion Test
+**Test Case ID**: TC004
+**Test Case Description**: Verify that cursor operations are correctly converted to DataFrame collect() and Python iteration
+**Expected Outcome**: All rows are processed correctly with same logic as cursor-based approach
+**Test Type**: Control Flow Conversion
+**Priority**: High
+
+### TC005: Aggregate Function Conversion Test
+**Test Case ID**: TC005
+**Test Case Description**: Verify that SQL SUM() function is correctly converted to PySpark spark_sum() function
+**Expected Outcome**: Aggregation results match between HiveQL and PySpark implementations
+**Test Type**: Function Conversion
+**Priority**: Medium
+
+### TC006: Data Type Conversion Test
+**Test Case ID**: TC006
+**Test Case Description**: Verify that SQL data types are correctly mapped to PySpark data types in schema definitions
+**Expected Outcome**: Schema validation passes and data types are correctly handled
+**Test Type**: Data Type Mapping
+**Priority**: Medium
+
+### TC007: INSERT Operations Conversion Test
+**Test Case ID**: TC007
+**Test Case Description**: Verify that INSERT INTO statements are correctly converted to DataFrame write operations
+**Expected Outcome**: Data is correctly written to target tables using DataFrame.write.saveAsTable()
+**Test Type**: DML Conversion
+**Priority**: High
+
+### TC008: Table Cleanup Conversion Test
+**Test Case ID**: TC008
+**Test Case Description**: Verify that DROP TABLE operations are correctly converted to dropTempView operations
+**Expected Outcome**: Temporary views are properly cleaned up after processing
+**Test Type**: Resource Management
+**Priority**: Medium
+
+### TC009: Date Range Filtering Test
+**Test Case ID**: TC009
+**Test Case Description**: Verify that date range filtering works correctly with BETWEEN clause conversion to DataFrame filter
+**Expected Outcome**: Only records within specified date range are processed
+**Test Type**: Filtering Logic
+**Priority**: High
+
+### TC010: Error Handling Enhancement Test
+**Test Case ID**: TC010
+**Test Case Description**: Verify that enhanced error handling with try-catch blocks works correctly
+**Expected Outcome**: Errors are properly caught, logged, and handled without crashing the application
+**Test Type**: Error Handling
+**Priority**: High
+
+### TC011: Performance Optimization Test
+**Test Case ID**: TC011
+**Test Case Description**: Verify that DataFrame caching improves performance for multiple operations
+**Expected Outcome**: Cached DataFrames show improved execution time for repeated operations
+**Test Type**: Performance
+**Priority**: Medium
+
+### TC012: Input Validation Test
+**Test Case ID**: TC012
+**Test Case Description**: Verify that input parameter validation correctly handles invalid date formats
+**Expected Outcome**: Invalid date formats are detected and appropriate errors are raised
+**Test Type**: Data Validation
+**Priority**: Medium
+
+### TC013: Large Dataset Scalability Test
+**Test Case ID**: TC013
+**Test Case Description**: Verify that the converted code handles large datasets without memory issues
+**Expected Outcome**: Large datasets are processed efficiently without OutOfMemory errors
+**Test Type**: Scalability
+**Priority**: High
+
+### TC014: SparkSession Configuration Test
+**Test Case ID**: TC014
+**Test Case Description**: Verify that SparkSession is properly configured with adaptive query execution
+**Expected Outcome**: SparkSession starts with correct configurations and optimizations enabled
+**Test Type**: Configuration
+**Priority**: Medium
+
+### TC015: Logging Integration Test
+**Test Case ID**: TC015
+**Test Case Description**: Verify that logging is properly integrated and provides meaningful information
+**Expected Outcome**: Log messages are generated at appropriate levels with useful information
+**Test Type**: Logging
+**Priority**: Low
+
+### TC016: Null Value Handling Test
+**Test Case ID**: TC016
+**Test Case Description**: Verify that null values are handled correctly in the conversion from cursor logic
+**Expected Outcome**: Null values are processed correctly without causing errors or data loss
+**Test Type**: Data Quality
+**Priority**: High
+
+### TC017: Schema Validation Test
+**Test Case ID**: TC017
+**Test Case Description**: Verify that StructType schema definitions correctly match expected data structure
+**Expected Outcome**: Schema validation passes and DataFrames are created with correct structure
+**Test Type**: Schema Management
+**Priority**: Medium
+
+### TC018: Resource Cleanup Test
+**Test Case ID**: TC018
+**Test Case Description**: Verify that all resources (cached DataFrames, temp views, SparkSession) are properly cleaned up
+**Expected Outcome**: No resource leaks occur and cleanup operations complete successfully
+**Test Type**: Resource Management
+**Priority**: Medium
+
+### TC019: End-to-End Integration Test
+**Test Case ID**: TC019
+**Test Case Description**: Verify that the complete conversion works end-to-end with realistic data
+**Expected Outcome**: Complete workflow executes successfully and produces expected results
+**Test Type**: Integration
+**Priority**: High
+
+### TC020: Backward Compatibility Test
+**Test Case ID**: TC020
+**Test Case Description**: Verify that the converted PySpark code produces same results as original HiveQL procedure
+**Expected Outcome**: Results from PySpark implementation match results from original HiveQL procedure
+**Test Type**: Compatibility
+**Priority**: Critical
+
+## EDGE CASES AND SPECIAL SCENARIOS:
+
+### EC001: Empty Dataset Handling
+**Description**: Test behavior when source tables contain no data
+**Expected Behavior**: Graceful handling without errors, appropriate logging
+
+### EC002: Invalid Date Range Handling
+**Description**: Test behavior when start_date > end_date
+**Expected Behavior**: Validation error or empty result set handling
+
+### EC003: Missing Table Handling
+**Description**: Test behavior when source tables don't exist
+**Expected Behavior**: Appropriate error handling and user-friendly error messages
+
+### EC004: Memory Pressure Scenarios
+**Description**: Test behavior under high memory usage conditions
+**Expected Behavior**: Efficient memory usage and garbage collection
+
+### EC005: Concurrent Execution Testing
+**Description**: Test behavior when multiple instances run simultaneously
+**Expected Behavior**: Thread-safe execution without data corruption
+
+## PERFORMANCE BENCHMARKS:
+
+### PB001: Execution Time Comparison
+**Metric**: Compare execution time between HiveQL and PySpark implementations
+**Target**: PySpark should be within 20% of HiveQL performance
+
+### PB002: Memory Usage Analysis
+**Metric**: Monitor memory consumption during processing
+**Target**: Memory usage should be predictable and within cluster limits
+
+### PB003: Scalability Testing
+**Metric**: Test performance with varying data sizes (1GB, 10GB, 100GB)
+**Target**: Linear scalability with data size increase
+
+## VALIDATION CRITERIA:
+
+### VC001: Data Accuracy
+**Criteria**: All aggregations and calculations must match original results
+**Validation Method**: Row-by-row comparison of output tables
+
+### VC002: Data Completeness
+**Criteria**: No data loss during conversion process
+**Validation Method**: Record count validation at each processing step
+
+### VC003: Schema Consistency
+**Criteria**: Output table schemas must match original specifications
+**Validation Method**: Schema comparison and data type validation
+
+### VC004: Error Handling Robustness
+**Criteria**: All error scenarios must be handled gracefully
+**Validation Method**: Negative testing with various error conditions
+
+## MANUAL INTERVENTION CHECKLIST:
+
+✅ **Performance Optimization**
+- [ ] DataFrame caching implemented
+- [ ] Adaptive query execution enabled
+- [ ] Partition optimization configured
+
+✅ **Error Handling**
+- [ ] Try-catch blocks added
+- [ ] Logging framework integrated
+- [ ] Error recovery mechanisms implemented
+
+✅ **Resource Management**
+- [ ] SparkSession lifecycle managed
+- [ ] Temporary views cleanup implemented
+- [ ] Memory management optimized
+
+✅ **Data Validation**
+- [ ] Input parameter validation added
+- [ ] Data quality checks implemented
+- [ ] Schema validation included
+
+✅ **Scalability Enhancements**
+- [ ] Large dataset handling optimized
+- [ ] Collect() operations minimized
+- [ ] Broadcast joins considered for small tables
+
+## TESTING EXECUTION PLAN:
+
+### Phase 1: Unit Testing (TC001-TC008)
+**Duration**: 2-3 days
+**Focus**: Basic syntax and conversion validation
+**Success Criteria**: All syntax conversions work correctly
+
+### Phase 2: Integration Testing (TC009-TC016)
+**Duration**: 3-4 days
+**Focus**: End-to-end workflow validation
+**Success Criteria**: Complete workflow produces expected results
+
+### Phase 3: Performance Testing (TC017-TC020)
+**Duration**: 2-3 days
+**Focus**: Performance and scalability validation
+**Success Criteria**: Performance meets or exceeds benchmarks
+
+### Phase 4: Edge Case Testing (EC001-EC005)
+**Duration**: 2 days
+**Focus**: Robustness and error handling validation
+**Success Criteria**: All edge cases handled gracefully
+
+## CONCLUSION:
+
+This comprehensive test suite covers all major aspects of the HiveQL to PySpark conversion, including:
+- Syntax transformation validation
+- Logic preservation verification
+- Performance optimization testing
+- Error handling validation
+- Scalability assessment
+- Resource management verification
+
+The test cases are designed to ensure that the converted PySpark code maintains the same functionality as the original HiveQL stored procedure while taking advantage of PySpark's distributed computing capabilities and modern programming practices.
