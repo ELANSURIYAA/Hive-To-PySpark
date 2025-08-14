@@ -1,293 +1,329 @@
 #!/usr/bin/env python3
 """
-Comprehensive Unit Tests for Hive_Stored_Procedure PySpark Conversion
-Generated for: process_sales_data function and utility functions
+Comprehensive Unit Tests for Hive_Stored_Procedure PySpark Code
+Generated for process_sales_data functions
 Version: 1
-Framework: Pytest with PySpark
-Coverage: Happy paths, edge cases, error handling, utility functions, integration tests
+Date: Auto-generated
+
+This test suite provides comprehensive coverage for:
+- process_sales_data()
+- process_sales_data_with_validation()
+- process_sales_data_sql_approach()
+
+Test Categories:
+- Happy path scenarios
+- Edge cases
+- Error handling and validation
+- Data transformation validation
+- Caching and performance
+- SQL approach testing
+- Integration and end-to-end
+- Schema and data type validation
 """
 
 import pytest
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from unittest.mock import patch, MagicMock
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import sum as spark_sum, col, lit, count, countDistinct
-from pyspark.sql.types import StructType, StructField, StringType, FloatType, DateType
+from pyspark.sql.functions import col, lit, sum as spark_sum
+from pyspark.sql.types import (
+    StructType, StructField, StringType, FloatType, DateType, IntegerType
+)
 from pyspark.sql.utils import AnalysisException
 
-class TestSalesDataProcessor:
+# Import the functions to test
+# Note: In actual implementation, adjust import path as needed
+try:
+    from Hive_Stored_Procedure_1 import (
+        process_sales_data,
+        process_sales_data_with_validation,
+        process_sales_data_sql_approach
+    )
+except ImportError:
+    # For testing purposes, we'll define mock functions
+    # In actual implementation, ensure proper import path
+    pass
+
+
+class TestProcessSalesData:
     """
-    Test class for sales data processing functionality.
-    Covers all aspects of the PySpark conversion from Hive stored procedure.
+    Test class for PySpark sales data processing functions
     """
     
-    @pytest.fixture(scope="class")
-    def spark_session(self):
+    @classmethod
+    def setup_class(cls):
         """
-        Create Spark session for testing.
+        Set up SparkSession for all tests
         """
-        spark = SparkSession.builder \n            .appName("TestSalesDataProcessor") \n            .master("local[2]") \n            .config("spark.sql.warehouse.dir", "/tmp/spark-warehouse") \n            .config("spark.sql.adaptive.enabled", "false") \n            .getOrCreate()
+        cls.spark = SparkSession.builder \n            .appName("TestProcessSalesData") \n            .config("spark.sql.adaptive.enabled", "true") \n            .config("spark.sql.adaptive.coalescePartitions.enabled", "true") \n            .config("spark.sql.warehouse.dir", "/tmp/spark-warehouse") \n            .enableHiveSupport() \n            .getOrCreate()
         
-        spark.sparkContext.setLogLevel("WARN")
-        yield spark
-        spark.stop()
-    
-    @pytest.fixture
-    def sample_sales_data(self, spark_session):
-        """
-        Create sample sales data for testing.
-        """
-        schema = StructType([
+        # Set log level to reduce noise during testing
+        cls.spark.sparkContext.setLogLevel("WARN")
+        
+        # Define schema for test data
+        cls.sales_schema = StructType([
             StructField("product_id", StringType(), True),
-            StructField("sales", FloatType(), True),
-            StructField("sale_date", DateType(), True)
+            StructField("sale_date", DateType(), True),
+            StructField("sales", FloatType(), True)
         ])
-        
-        data = [
-            ("P001", 100.0, datetime.strptime("2023-01-15", "%Y-%m-%d").date()),
-            ("P001", 150.0, datetime.strptime("2023-02-20", "%Y-%m-%d").date()),
-            ("P002", 200.0, datetime.strptime("2023-01-10", "%Y-%m-%d").date()),
-            ("P002", None, datetime.strptime("2023-03-15", "%Y-%m-%d").date()),
-            ("P003", 0.0, datetime.strptime("2023-06-01", "%Y-%m-%d").date()),
-            ("P003", 300.0, datetime.strptime("2023-07-15", "%Y-%m-%d").date()),
-            ("P004", 250.0, datetime.strptime("2024-01-01", "%Y-%m-%d").date()),
+    
+    @classmethod
+    def teardown_class(cls):
+        """
+        Clean up SparkSession after all tests
+        """
+        cls.spark.stop()
+    
+    def setup_method(self):
+        """
+        Set up before each test method
+        """
+        # Clean up any existing tables/views before each test
+        self.cleanup_test_tables()
+    
+    def teardown_method(self):
+        """
+        Clean up after each test method
+        """
+        # Clean up any tables/views created during test
+        self.cleanup_test_tables()
+    
+    def cleanup_test_tables(self):
+        """
+        Helper method to clean up test tables and views
+        """
+        tables_to_drop = [
+            "sales_table", "summary_table", "detailed_sales_summary"
         ]
+        views_to_drop = ["temp_sales_summary"]
         
-        df = spark_session.createDataFrame(data, schema)
+        for table in tables_to_drop:
+            try:
+                self.spark.sql(f"DROP TABLE IF EXISTS {table}")
+            except Exception:
+                pass
+        
+        for view in views_to_drop:
+            try:
+                self.spark.catalog.dropTempView(view)
+            except Exception:
+                pass
+    
+    def create_mock_sales_data(self, data_list):
+        """
+        Helper method to create mock sales data
+        
+        Args:
+            data_list: List of tuples (product_id, sale_date, sales)
+        
+        Returns:
+            DataFrame with mock sales data
+        """
+        # Convert string dates to date objects if needed
+        processed_data = []
+        for product_id, sale_date, sales in data_list:
+            if isinstance(sale_date, str):
+                sale_date = datetime.strptime(sale_date, '%Y-%m-%d').date()
+            processed_data.append((product_id, sale_date, sales))
+        
+        df = self.spark.createDataFrame(processed_data, self.sales_schema)
         df.createOrReplaceTempView("sales_table")
         return df
     
-    @pytest.fixture
-    def empty_sales_data(self, spark_session):
+    def create_output_tables(self):
         """
-        Create empty sales data for edge case testing.
+        Helper method to create output tables for testing
         """
-        schema = StructType([
-            StructField("product_id", StringType(), True),
-            StructField("sales", FloatType(), True),
-            StructField("sale_date", DateType(), True)
-        ])
-        
-        df = spark_session.createDataFrame([], schema)
-        df.createOrReplaceTempView("sales_table")
-        return df
-    
-    @pytest.fixture
-    def setup_target_tables(self, spark_session):
-        """
-        Setup target tables for testing.
-        """
+        # Create summary_table
         summary_schema = StructType([
             StructField("product_id", StringType(), True),
             StructField("total_sales", FloatType(), True)
         ])
-        summary_df = spark_session.createDataFrame([], summary_schema)
-        summary_df.createOrReplaceTempView("summary_table")
+        empty_summary_df = self.spark.createDataFrame([], summary_schema)
+        empty_summary_df.write.mode("overwrite").saveAsTable("summary_table")
         
+        # Create detailed_sales_summary table
         detailed_schema = StructType([
             StructField("product_id", StringType(), True),
             StructField("total_sales", FloatType(), True)
         ])
-        detailed_df = spark_session.createDataFrame([], detailed_schema)
-        detailed_df.createOrReplaceTempView("detailed_sales_summary")
+        empty_detailed_df = self.spark.createDataFrame([], detailed_schema)
+        empty_detailed_df.write.mode("overwrite").saveAsTable("detailed_sales_summary")
     
-    # ============================================================================
-    # HAPPY PATH SCENARIOS
-    # ============================================================================
+    # GROUP 1: HAPPY PATH SCENARIOS
     
-    def test_tc001_valid_date_range_processing(self, spark_session, sample_sales_data, setup_target_tables):
+    def test_tc_001_successful_processing_valid_date_range(self):
         """
-        TC001: Test successful processing of sales data with valid start and end dates.
+        TC_001: Test successful processing of sales data with valid date range
         """
-        start_date = "2023-01-01"
-        end_date = "2023-12-31"
-        
-        filtered_df = sample_sales_data.filter(
-            (col("sale_date") >= lit(start_date)) & 
-            (col("sale_date") <= lit(end_date))
-        )
-        
-        result_df = filtered_df.groupBy("product_id") \n            .agg(spark_sum("sales").alias("total_sales"))
-        
-        results = result_df.collect()
-        
-        assert len(results) == 3
-        result_dict = {row["product_id"]: row["total_sales"] for row in results}
-        assert result_dict["P001"] == 250.0
-        assert result_dict["P002"] == 200.0
-        assert result_dict["P003"] == 300.0
-    
-    def test_tc002_single_day_date_range(self, spark_session, sample_sales_data, setup_target_tables):
-        """
-        TC002: Test processing when start_date equals end_date.
-        """
-        start_date = "2023-01-15"
-        end_date = "2023-01-15"
-        
-        filtered_df = sample_sales_data.filter(
-            (col("sale_date") >= lit(start_date)) & 
-            (col("sale_date") <= lit(end_date))
-        )
-        
-        results = filtered_df.collect()
-        
-        assert len(results) == 1
-        assert results[0]["product_id"] == "P001"
-        assert results[0]["sales"] == 100.0
-    
-    def test_tc003_large_dataset_processing(self, spark_session, setup_target_tables):
-        """
-        TC003: Test function performance with large volume of sales data.
-        """
-        large_data = []
-        for i in range(1000):
-            product_id = f"P{i % 100:03d}"
-            sales = float(i % 1000)
-            sale_date = datetime.strptime("2023-01-01", "%Y-%m-%d").date()
-            large_data.append((product_id, sales, sale_date))
-        
-        schema = StructType([
-            StructField("product_id", StringType(), True),
-            StructField("sales", FloatType(), True),
-            StructField("sale_date", DateType(), True)
-        ])
-        
-        large_df = spark_session.createDataFrame(large_data, schema)
-        large_df.createOrReplaceTempView("sales_table")
-        
-        start_date = "2023-01-01"
-        end_date = "2023-12-31"
-        
-        filtered_df = large_df.filter(
-            (col("sale_date") >= lit(start_date)) & 
-            (col("sale_date") <= lit(end_date))
-        )
-        
-        result_df = filtered_df.groupBy("product_id") \n            .agg(spark_sum("sales").alias("total_sales"))
-        
-        results = result_df.collect()
-        
-        assert len(results) == 100
-        assert all(row["total_sales"] is not None for row in results)
-    
-    def test_tc004_multiple_products_aggregation(self, spark_session, sample_sales_data, setup_target_tables):
-        """
-        TC004: Test aggregation logic for multiple products.
-        """
-        start_date = "2023-01-01"
-        end_date = "2023-03-31"
-        
-        filtered_df = sample_sales_data.filter(
-            (col("sale_date") >= lit(start_date)) & 
-            (col("sale_date") <= lit(end_date))
-        )
-        
-        result_df = filtered_df.groupBy("product_id") \n            .agg(spark_sum("sales").alias("total_sales"))
-        
-        results = result_df.collect()
-        result_dict = {row["product_id"]: row["total_sales"] for row in results}
-        
-        assert "P001" in result_dict
-        assert "P002" in result_dict
-        assert result_dict["P001"] == 250.0
-        assert result_dict["P002"] == 200.0
-    
-    # ============================================================================
-    # EDGE CASES
-    # ============================================================================
-    
-    def test_tc005_empty_sales_table(self, spark_session, empty_sales_data, setup_target_tables):
-        """
-        TC005: Test behavior when sales_table is empty.
-        """
-        start_date = "2023-01-01"
-        end_date = "2023-12-31"
-        
-        filtered_df = empty_sales_data.filter(
-            (col("sale_date") >= lit(start_date)) & 
-            (col("sale_date") <= lit(end_date))
-        )
-        
-        results = filtered_df.collect()
-        
-        assert len(results) == 0
-        assert filtered_df.count() == 0
-    
-    def test_tc006_no_records_in_date_range(self, spark_session, sample_sales_data, setup_target_tables):
-        """
-        TC006: Test when no sales records exist within specified date range.
-        """
-        start_date = "2025-01-01"
-        end_date = "2025-12-31"
-        
-        filtered_df = sample_sales_data.filter(
-            (col("sale_date") >= lit(start_date)) & 
-            (col("sale_date") <= lit(end_date))
-        )
-        
-        results = filtered_df.collect()
-        assert len(results) == 0
-    
-    def test_tc007_null_sales_values(self, spark_session, sample_sales_data, setup_target_tables):
-        """
-        TC007: Test handling of null values in sales column.
-        """
-        start_date = "2023-01-01"
-        end_date = "2023-12-31"
-        
-        filtered_df = sample_sales_data.filter(
-            (col("sale_date") >= lit(start_date)) & 
-            (col("sale_date") <= lit(end_date))
-        )
-        
-        result_df = filtered_df.groupBy("product_id") \n            .agg(spark_sum("sales").alias("total_sales"))
-        
-        detailed_df = result_df.filter(col("total_sales").isNotNull())
-        
-        results = detailed_df.collect()
-        result_dict = {row["product_id"]: row["total_sales"] for row in results}
-        
-        assert "P002" in result_dict
-        assert result_dict["P002"] == 200.0
-    
-    def test_tc008_duplicate_product_records(self, spark_session, setup_target_tables):
-        """
-        TC008: Test aggregation when multiple records exist for same product.
-        """
-        schema = StructType([
-            StructField("product_id", StringType(), True),
-            StructField("sales", FloatType(), True),
-            StructField("sale_date", DateType(), True)
-        ])
-        
-        data = [
-            ("P001", 100.0, datetime.strptime("2023-01-15", "%Y-%m-%d").date()),
-            ("P001", 150.0, datetime.strptime("2023-01-16", "%Y-%m-%d").date()),
-            ("P001", 200.0, datetime.strptime("2023-01-17", "%Y-%m-%d").date()),
+        # Arrange
+        mock_data = [
+            ("P001", "2024-01-15", 100.0),
+            ("P002", "2024-01-20", 200.0),
+            ("P001", "2024-01-25", 150.0)
         ]
+        self.create_mock_sales_data(mock_data)
+        self.create_output_tables()
         
-        df = spark_session.createDataFrame(data, schema)
-        df.createOrReplaceTempView("sales_table")
+        # Act
+        process_sales_data("2024-01-01", "2024-01-31")
         
-        start_date = "2023-01-01"
-        end_date = "2023-12-31"
+        # Assert
+        summary_result = self.spark.table("summary_table").collect()
+        detailed_result = self.spark.table("detailed_sales_summary").collect()
         
-        filtered_df = df.filter(
-            (col("sale_date") >= lit(start_date)) & 
-            (col("sale_date") <= lit(end_date))
-        )
+        assert len(summary_result) == 2
+        assert len(detailed_result) == 2
         
-        result_df = filtered_df.groupBy("product_id") \n            .agg(spark_sum("sales").alias("total_sales"))
-        
-        results = result_df.collect()
-        
-        assert len(results) == 1
-        assert results[0]["product_id"] == "P001"
-        assert results[0]["total_sales"] == 450.0
+        # Check aggregation correctness
+        summary_dict = {row.product_id: row.total_sales for row in summary_result}
+        assert summary_dict["P001"] == 250.0  # 100 + 150
+        assert summary_dict["P002"] == 200.0
     
-    def test_tc009_boundary_date_values(self, spark_session, setup_target_tables):
+    def test_tc_002_single_day_date_range(self):
         """
-        TC009: Test with dates at exact boundary of available data.
+        TC_002: Test processing with single day date range
         """
-        schema = StructType([
+        # Arrange
+        mock_data = [
+            ("P001", "2024-01-15", 100.0),
+            ("P002", "2024-01-15", 200.0),
+            ("P001", "2024-01-16", 150.0)  # Should be excluded
+        ]
+        self.create_mock_sales_data(mock_data)
+        self.create_output_tables()
+        
+        # Act
+        process_sales_data("2024-01-15", "2024-01-15")
+        
+        # Assert
+        summary_result = self.spark.table("summary_table").collect()
+        assert len(summary_result) == 2
+        
+        summary_dict = {row.product_id: row.total_sales for row in summary_result}
+        assert summary_dict["P001"] == 100.0
+        assert summary_dict["P002"] == 200.0
+    
+    def test_tc_003_multiple_products_aggregation(self):
+        """
+        TC_003: Test processing with multiple products and aggregation
+        """
+        # Arrange
+        mock_data = [
+            ("P003", "2024-01-15", 300.0),
+            ("P001", "2024-01-15", 100.0),
+            ("P002", "2024-01-15", 200.0),
+            ("P001", "2024-01-20", 150.0),
+            ("P003", "2024-01-25", 250.0)
+        ]
+        self.create_mock_sales_data(mock_data)
+        self.create_output_tables()
+        
+        # Act
+        process_sales_data("2024-01-01", "2024-01-31")
+        
+        # Assert
+        summary_result = self.spark.table("summary_table").orderBy("product_id").collect()
+        assert len(summary_result) == 3
+        
+        # Check ordering (should be P001, P002, P003)
+        assert summary_result[0].product_id == "P001"
+        assert summary_result[1].product_id == "P002"
+        assert summary_result[2].product_id == "P003"
+        
+        # Check aggregation
+        assert summary_result[0].total_sales == 250.0  # P001: 100 + 150
+        assert summary_result[1].total_sales == 200.0  # P002: 200
+        assert summary_result[2].total_sales == 550.0  # P003: 300 + 250
+    
+    # GROUP 2: EDGE CASES
+    
+    def test_tc_004_empty_sales_table(self):
+        """
+        TC_004: Test processing with empty sales table
+        """
+        # Arrange
+        self.create_mock_sales_data([])  # Empty data
+        self.create_output_tables()
+        
+        # Act
+        process_sales_data("2024-01-01", "2024-01-31")
+        
+        # Assert
+        summary_result = self.spark.table("summary_table").collect()
+        detailed_result = self.spark.table("detailed_sales_summary").collect()
+        
+        assert len(summary_result) == 0
+        assert len(detailed_result) == 0
+    
+    def test_tc_005_no_records_in_date_range(self):
+        """
+        TC_005: Test processing with no records in date range
+        """
+        # Arrange
+        mock_data = [
+            ("P001", "2024-01-15", 100.0),
+            ("P002", "2024-01-20", 200.0)
+        ]
+        self.create_mock_sales_data(mock_data)
+        self.create_output_tables()
+        
+        # Act - Query for June when data is in January
+        process_sales_data("2024-06-01", "2024-06-30")
+        
+        # Assert
+        summary_result = self.spark.table("summary_table").collect()
+        detailed_result = self.spark.table("detailed_sales_summary").collect()
+        
+        assert len(summary_result) == 0
+        assert len(detailed_result) == 0
+    
+    def test_tc_006_null_values_in_sales_data(self):
+        """
+        TC_006: Test processing with null values in sales data
+        """
+        # Arrange
+        mock_data = [
+            ("P001", "2024-01-15", 100.0),
+            ("P002", "2024-01-20", None),  # Null sales value
+            ("P001", "2024-01-25", 150.0)
+        ]
+        self.create_mock_sales_data(mock_data)
+        self.create_output_tables()
+        
+        # Act
+        process_sales_data("2024-01-01", "2024-01-31")
+        
+        # Assert
+        summary_result = self.spark.table("summary_table").collect()
+        summary_dict = {row.product_id: row.total_sales for row in summary_result}
+        
+        # P001 should have sum of non-null values
+        assert summary_dict["P001"] == 250.0
+        # P002 should have null or 0 (depending on Spark's sum behavior with nulls)
+        assert "P002" not in summary_dict or summary_dict["P002"] is None
+    
+    def test_tc_007_duplicate_product_records(self):
+        """
+        TC_007: Test processing with duplicate product records
+        """
+        # Arrange
+        mock_data = [
+            ("P001", "2024-01-15", 100.0),
+            ("P001", "2024-01-16", 150.0),
+            ("P001", "2024-01-17", 200.0)
+        ]
+        self.create_mock_sales_data(mock_data)
+        self.create_output_tables()
+        
+        # Act
+        process_sales_data("2024-01-01", "2024-01-31")
+        
+        # Assert
+        summary_result = self.spark.table("summary_table").collect()
+        assert len(summary_result) == 1
+        assert summary_result[0].product_id == "P001"
+        assert summary_result[0].total_sales == 450.0  # 100 + 150 + 200
+    
+    def test_tc_008_boundary_date_values(self):\
