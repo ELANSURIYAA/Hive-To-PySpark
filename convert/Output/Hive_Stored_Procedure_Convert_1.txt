@@ -1,0 +1,391 @@
+=============================================
+Author:        Ascendion AVA+
+Created on:   
+Description:   Hive stored procedure 'process_sales_data' converted to PySpark DataFrame operations for distributed processing
+=============================================
+
+#!/usr/bin/env python3
+"""
+Hive to PySpark Conversion
+==========================
+
+Original Hive Stored Procedure: process_sales_data
+Converted to: PySpark DataFrame API
+
+Conversion Metadata:
+- Original: Hive stored procedure with dynamic SQL and cursor operations
+- Target: PySpark DataFrame operations with optimized distributed computing
+- Parameters: start_date (STRING), end_date (STRING)
+- Tables: sales_table (source), summary_table (target), detailed_sales_summary (target)
+
+Key Transformations:
+1. Dynamic SQL -> DataFrame operations with parameterized filters
+2. Temporary table -> DataFrame caching
+3. Cursor iteration -> DataFrame collect() and batch insert
+4. Manual memory management -> Spark's automatic optimization
+
+Author: Data Engineering Team
+Date: Generated via Hive-to-PySpark Migration Agent
+Version: 1.0
+"""
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import sum as spark_sum, col
+from pyspark.sql.types import StructType, StructField, StringType, FloatType
+import logging
+from typing import Optional
+from datetime import datetime
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class SalesDataProcessor:
+    """
+    PySpark equivalent of Hive stored procedure 'process_sales_data'
+    
+    This class encapsulates the business logic previously implemented
+    as a Hive stored procedure, converting it to use PySpark DataFrame APIs
+    for better performance and maintainability in a distributed environment.
+    """
+    
+    def __init__(self, spark_session: Optional[SparkSession] = None):
+        """
+        Initialize the SalesDataProcessor with Spark session
+        
+        Args:
+            spark_session: Optional SparkSession instance. If None, creates a new one.
+        """
+        if spark_session is None:
+            self.spark = self._create_spark_session()
+        else:
+            self.spark = spark_session
+            
+        logger.info("SalesDataProcessor initialized successfully")
+    
+    def _create_spark_session(self) -> SparkSession:
+        """
+        Create and configure Spark session with optimizations
+        
+        Returns:
+            Configured SparkSession instance
+        """
+        return SparkSession.builder \
+            .appName("SalesDataProcessor_HiveConversion") \
+            .config("spark.sql.adaptive.enabled", "true") \
+            .config("spark.sql.adaptive.coalescePartitions.enabled", "true") \
+            .config("spark.sql.adaptive.skewJoin.enabled", "true") \
+            .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") \
+            .enableHiveSupport() \
+            .getOrCreate()
+    
+    def process_sales_data(self, start_date: str, end_date: str) -> bool:
+        """
+        Main function equivalent to the Hive stored procedure 'process_sales_data'
+        
+        This function performs the same operations as the original Hive procedure:
+        1. Aggregates sales data and inserts into summary_table
+        2. Creates temporary aggregated data (cached DataFrame)
+        3. Iterates through results and inserts into detailed_sales_summary
+        4. Cleans up temporary resources
+        
+        Args:
+            start_date (str): Start date for filtering sales data (YYYY-MM-DD format)
+            end_date (str): End date for filtering sales data (YYYY-MM-DD format)
+            
+        Returns:
+            bool: True if processing completed successfully, False otherwise
+        """
+        try:
+            logger.info(f"Starting sales data processing for date range: {start_date} to {end_date}")
+            
+            # Validate input parameters
+            if not self._validate_date_parameters(start_date, end_date):
+                logger.error("Invalid date parameters provided")
+                return False
+            
+            # Step 1: Execute dynamic SQL equivalent - Insert aggregated data into summary_table
+            logger.info("Step 1: Processing summary_table insert")
+            self._insert_summary_data(start_date, end_date)
+            
+            # Step 2: Create temporary table equivalent - Cached DataFrame
+            logger.info("Step 2: Creating temporary sales summary")
+            temp_sales_summary = self._create_temp_sales_summary(start_date, end_date)
+            
+            # Step 3: Cursor equivalent - Collect and iterate through results
+            logger.info("Step 3: Processing detailed sales summary")
+            self._process_detailed_summary(temp_sales_summary)
+            
+            # Step 4: Cleanup - Unpersist cached DataFrame
+            logger.info("Step 4: Cleaning up temporary resources")
+            temp_sales_summary.unpersist()
+            
+            logger.info("Sales data processing completed successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error processing sales data: {str(e)}")
+            return False
+    
+    def _validate_date_parameters(self, start_date: str, end_date: str) -> bool:
+        """
+        Validate input date parameters
+        
+        Args:
+            start_date (str): Start date string
+            end_date (str): End date string
+            
+        Returns:
+            bool: True if dates are valid, False otherwise
+        """
+        try:
+            # Basic validation - ensure dates are not empty and in reasonable format
+            if not start_date or not end_date:
+                return False
+            
+            # Additional validation can be added here (e.g., date format validation)
+            return True
+            
+        except Exception as e:
+            logger.error(f"Date validation error: {str(e)}")
+            return False
+    
+    def _insert_summary_data(self, start_date: str, end_date: str) -> None:
+        """
+        Equivalent to the dynamic SQL INSERT operation in the original procedure
+        
+        Aggregates sales data by product_id within the date range and inserts
+        into summary_table using DataFrame operations instead of dynamic SQL.
+        
+        Args:
+            start_date (str): Start date for filtering
+            end_date (str): End date for filtering
+        """
+        try:
+            # Read sales_table and apply filters and aggregations
+            sales_df = self.spark.table("sales_table")
+            
+            # Apply date filter and group by product_id
+            summary_data = sales_df \
+                .filter((col("sale_date") >= start_date) & (col("sale_date") <= end_date)) \
+                .groupBy("product_id") \
+                .agg(spark_sum("sales").alias("total_sales"))
+            
+            # Insert into summary_table (equivalent to INSERT INTO)
+            summary_data.write \
+                .mode("append") \
+                .insertInto("summary_table")
+            
+            logger.info(f"Successfully inserted summary data for {summary_data.count()} products")
+            
+        except Exception as e:
+            logger.error(f"Error inserting summary data: {str(e)}")
+            raise
+    
+    def _create_temp_sales_summary(self, start_date: str, end_date: str):
+        """
+        Create temporary sales summary DataFrame (equivalent to CREATE TEMPORARY TABLE)
+        
+        Args:
+            start_date (str): Start date for filtering
+            end_date (str): End date for filtering
+            
+        Returns:
+            DataFrame: Cached DataFrame with aggregated sales data
+        """
+        try:
+            # Read and aggregate sales data
+            sales_df = self.spark.table("sales_table")
+            
+            temp_summary = sales_df \
+                .filter((col("sale_date") >= start_date) & (col("sale_date") <= end_date)) \
+                .groupBy("product_id") \
+                .agg(spark_sum("sales").alias("total_sales"))
+            
+            # Cache the DataFrame for efficient reuse (equivalent to temporary table)
+            temp_summary.cache()
+            
+            # Trigger caching by performing an action
+            record_count = temp_summary.count()
+            logger.info(f"Created temporary sales summary with {record_count} records")
+            
+            return temp_summary
+            
+        except Exception as e:
+            logger.error(f"Error creating temporary sales summary: {str(e)}")
+            raise
+    
+    def _process_detailed_summary(self, temp_sales_summary) -> None:
+        """
+        Process detailed summary insertion (equivalent to cursor operations)
+        
+        This method replaces the cursor-based iteration with DataFrame operations
+        optimized for Spark's distributed computing model.
+        
+        Args:
+            temp_sales_summary: Cached DataFrame with aggregated sales data
+        """
+        try:
+            # Collect data for iteration (equivalent to cursor fetch)
+            # Note: collect() brings data to driver - use with caution for large datasets
+            summary_rows = temp_sales_summary.collect()
+            
+            if not summary_rows:
+                logger.warning("No data found in temporary sales summary")
+                return
+            
+            # Prepare data for batch insert
+            detailed_records = []
+            for row in summary_rows:
+                product_id = row['product_id']
+                total_sales = row['total_sales']
+                
+                # Only process non-null total_sales (equivalent to WHILE total_sales IS NOT NULL)
+                if total_sales is not None:
+                    detailed_records.append((product_id, total_sales))
+            
+            if detailed_records:
+                # Create DataFrame for batch insert (more efficient than row-by-row)
+                schema = StructType([
+                    StructField("product_id", StringType(), True),
+                    StructField("total_sales", FloatType(), True)
+                ])
+                
+                detailed_df = self.spark.createDataFrame(detailed_records, schema)
+                
+                # Batch insert into detailed_sales_summary table
+                detailed_df.write \
+                    .mode("append") \
+                    .insertInto("detailed_sales_summary")
+                
+                logger.info(f"Successfully inserted {len(detailed_records)} records into detailed_sales_summary")
+            
+        except Exception as e:
+            logger.error(f"Error processing detailed summary: {str(e)}")
+            raise
+    
+    def close(self) -> None:
+        """
+        Clean up resources and close Spark session
+        """
+        if self.spark:
+            self.spark.stop()
+            logger.info("Spark session closed successfully")
+
+
+def main():
+    """
+    Main execution function - demonstrates usage of the converted stored procedure
+    """
+    processor = None
+    try:
+        # Initialize processor
+        processor = SalesDataProcessor()
+        
+        # Example usage - replace with actual date parameters
+        start_date = "2024-01-01"
+        end_date = "2024-12-31"
+        
+        # Execute the converted stored procedure
+        success = processor.process_sales_data(start_date, end_date)
+        
+        if success:
+            logger.info("Sales data processing completed successfully")
+        else:
+            logger.error("Sales data processing failed")
+            
+    except Exception as e:
+        logger.error(f"Main execution error: {str(e)}")
+    finally:
+        if processor:
+            processor.close()
+
+
+if __name__ == "__main__":
+    main()
+
+
+# Alternative function-based approach (for simpler use cases)
+def process_sales_data_function(start_date: str, end_date: str, spark: SparkSession = None) -> bool:
+    """
+    Simplified function-based version of the stored procedure conversion
+    
+    Args:
+        start_date (str): Start date for processing
+        end_date (str): End date for processing
+        spark (SparkSession): Optional Spark session
+        
+    Returns:
+        bool: Success status
+    """
+    if spark is None:
+        spark = SparkSession.builder.appName("SalesDataProcessor").enableHiveSupport().getOrCreate()
+    
+    try:
+        # Step 1: Summary table insert
+        sales_df = spark.table("sales_table")
+        summary_data = sales_df \
+            .filter((col("sale_date") >= start_date) & (col("sale_date") <= end_date)) \
+            .groupBy("product_id") \
+            .agg(spark_sum("sales").alias("total_sales"))
+        
+        summary_data.write.mode("append").insertInto("summary_table")
+        
+        # Step 2: Detailed summary processing
+        temp_summary = summary_data.cache()
+        rows = temp_summary.collect()
+        
+        detailed_records = [(row['product_id'], row['total_sales']) 
+                          for row in rows if row['total_sales'] is not None]
+        
+        if detailed_records:
+            schema = StructType([
+                StructField("product_id", StringType(), True),
+                StructField("total_sales", FloatType(), True)
+            ])
+            
+            detailed_df = spark.createDataFrame(detailed_records, schema)
+            detailed_df.write.mode("append").insertInto("detailed_sales_summary")
+        
+        temp_summary.unpersist()
+        return True
+        
+    except Exception as e:
+        logger.error(f"Function-based processing error: {str(e)}")
+        return False
+
+
+"""
+Usage Examples:
+===============
+
+# Class-based approach (recommended for complex scenarios)
+processor = SalesDataProcessor()
+success = processor.process_sales_data('2024-01-01', '2024-12-31')
+processor.close()
+
+# Function-based approach (for simple use cases)
+success = process_sales_data_function('2024-01-01', '2024-12-31')
+
+# With existing Spark session
+spark = SparkSession.builder.appName("MyApp").getOrCreate()
+processor = SalesDataProcessor(spark)
+success = processor.process_sales_data('2024-01-01', '2024-12-31')
+# Note: Don't call processor.close() if you want to reuse the spark session
+
+Optimization Notes:
+==================
+1. DataFrame operations are optimized by Spark's Catalyst optimizer
+2. Caching is used instead of temporary tables for better memory management
+3. Batch inserts replace cursor-based row-by-row operations
+4. Adaptive Query Execution (AQE) is enabled for better performance
+5. Proper resource cleanup prevents memory leaks
+
+Migration Considerations:
+========================
+1. Test with small datasets first to validate logic
+2. Monitor Spark UI for performance optimization opportunities
+3. Adjust partition sizes based on data volume
+4. Consider using DataFrame.write.bucketBy() for large tables
+5. Implement proper error handling and logging for production use
+"""
