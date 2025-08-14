@@ -1,0 +1,209 @@
+# Unit Test Cases for Hive_Stored_Procedure PySpark Code
+# Version: 1
+# Generated for: process_sales_data, validate_date_format, get_sales_statistics functions
+
+=== TEST CASE DOCUMENTATION ===
+
+## TEST CASE ID: TC001
+**Test Case Description**: Test process_sales_data with valid date range and normal data
+**Test Type**: Happy Path
+**Expected Outcome**: 
+- Function executes successfully without exceptions
+- Filtered data contains records within the specified date range
+- Summary table is created with correct aggregations
+- Detailed sales summary table is populated
+- Temporary view is created and dropped successfully
+- Cache is properly managed
+
+## TEST CASE ID: TC002
+**Test Case Description**: Test process_sales_data with empty sales table
+**Test Type**: Edge Case
+**Expected Outcome**: 
+- Function logs warning message about no data found
+- Function returns early without processing
+- No exceptions are raised
+- No data is written to output tables
+
+## TEST CASE ID: TC003
+**Test Case Description**: Test process_sales_data with date range that returns no records
+**Test Type**: Edge Case
+**Expected Outcome**: 
+- Function executes without errors
+- Filtered DataFrame is empty
+- Summary DataFrame is empty
+- No records are inserted into summary tables
+- Temporary view operations handle empty data gracefully
+
+## TEST CASE ID: TC004
+**Test Case Description**: Test process_sales_data with null values in sales data
+**Test Type**: Edge Case
+**Expected Outcome**: 
+- Function handles null values in sales column appropriately
+- Aggregation functions handle nulls correctly
+- Summary calculations exclude or handle null values as expected
+- No exceptions are raised due to null values
+
+## TEST CASE ID: TC005
+**Test Case Description**: Test process_sales_data with invalid date format parameters
+**Test Type**: Error Handling
+**Expected Outcome**: 
+- Function raises appropriate exception for invalid date formats
+- Error is logged with descriptive message
+- No partial data processing occurs
+- Resources are cleaned up properly
+
+## TEST CASE ID: TC006
+**Test Case Description**: Test process_sales_data with start_date > end_date
+**Test Type**: Edge Case
+**Expected Outcome**: 
+- Function handles inverted date range gracefully
+- Either returns empty result or raises appropriate validation error
+- No data corruption occurs
+
+## TEST CASE ID: TC007
+**Test Case Description**: Test process_sales_data with single day date range
+**Test Type**: Boundary Value
+**Expected Outcome**: 
+- Function processes single day data correctly
+- Date filtering works for equal start and end dates
+- Aggregations are calculated correctly for single day
+
+## TEST CASE ID: TC008
+**Test Case Description**: Test process_sales_data with large dataset simulation
+**Test Type**: Performance/Load
+**Expected Outcome**: 
+- Function handles large datasets efficiently
+- Caching improves performance for multiple operations
+- Memory usage is optimized
+- collect() operation is handled appropriately
+
+## TEST CASE ID: TC009
+**Test Case Description**: Test validate_date_format with valid date strings
+**Test Type**: Happy Path
+**Expected Outcome**: 
+- Returns True for valid YYYY-MM-DD format dates
+- Correctly validates various valid date combinations
+- No exceptions are raised
+
+## TEST CASE ID: TC010
+**Test Case Description**: Test validate_date_format with invalid date strings
+**Test Type**: Edge Case
+**Expected Outcome**: 
+- Returns False for invalid date formats
+- Returns False for invalid dates (e.g., 2023-13-45)
+- Returns False for non-string inputs
+- No exceptions are raised
+
+## TEST CASE ID: TC011
+**Test Case Description**: Test validate_date_format with edge date values
+**Test Type**: Boundary Value
+**Expected Outcome**: 
+- Correctly validates leap year dates
+- Handles month boundaries correctly
+- Validates year boundaries appropriately
+
+## TEST CASE ID: TC012
+**Test Case Description**: Test get_sales_statistics with normal data
+**Test Type**: Happy Path
+**Expected Outcome**: 
+- Returns dictionary with correct statistics
+- total_records count matches filtered data
+- unique_products count is accurate
+- total_sales_amount is correctly calculated
+
+## TEST CASE ID: TC013
+**Test Case Description**: Test get_sales_statistics with empty filtered data
+**Test Type**: Edge Case
+**Expected Outcome**: 
+- Returns statistics dictionary with zero values
+- total_records is 0
+- unique_products is 0
+- total_sales_amount is 0 or null
+
+## TEST CASE ID: TC014
+**Test Case Description**: Test get_sales_statistics with null sales values
+**Test Type**: Edge Case
+**Expected Outcome**: 
+- Statistics handle null values appropriately
+- total_sales_amount calculation excludes or handles nulls
+- Record counts are accurate regardless of null values
+
+## TEST CASE ID: TC015
+**Test Case Description**: Test process_sales_data exception handling
+**Test Type**: Error Handling
+**Expected Outcome**: 
+- Exceptions are caught and logged appropriately
+- Original exception is re-raised for proper error propagation
+- Resources are cleaned up even when exceptions occur
+
+## TEST CASE ID: TC016
+**Test Case Description**: Test DataFrame operations and transformations
+**Test Type**: Functional
+**Expected Outcome**: 
+- Filter operations work correctly with date conditions
+- GroupBy and aggregation produce expected results
+- OrderBy sorts data correctly
+- Column aliasing works as expected
+
+## TEST CASE ID: TC017
+**Test Case Description**: Test temporary view creation and cleanup
+**Test Type**: Functional
+**Expected Outcome**: 
+- Temporary view 'temp_sales_summary' is created successfully
+- View can be queried and returns expected data
+- View is properly dropped at the end of processing
+- No resource leaks occur
+
+## TEST CASE ID: TC018
+**Test Case Description**: Test DataFrame caching and unpersisting
+**Test Type**: Performance
+**Expected Outcome**: 
+- DataFrame is cached successfully
+- Cached data improves performance for multiple operations
+- Cache is properly unpersisted to free memory
+- No memory leaks occur
+
+## TEST CASE ID: TC019
+**Test Case Description**: Test data type handling and schema validation
+**Test Type**: Data Integrity
+**Expected Outcome**: 
+- String and Float data types are handled correctly
+- Schema validation works for detailed_df creation
+- Data type conversions are accurate
+- No data corruption occurs during type handling
+
+## TEST CASE ID: TC020
+**Test Case Description**: Test integration with multiple functions
+**Test Type**: Integration
+**Expected Outcome**: 
+- validate_date_format can be used with process_sales_data
+- get_sales_statistics works with same data as process_sales_data
+- All functions work together without conflicts
+- Shared SparkSession usage is handled correctly
+
+=== COVERAGE SUMMARY ===
+
+**Function Coverage:**
+- process_sales_data: TC001-TC008, TC015-TC020
+- validate_date_format: TC009-TC011
+- get_sales_statistics: TC012-TC014
+
+**Test Type Coverage:**
+- Happy Path: 3 test cases
+- Edge Cases: 8 test cases
+- Error Handling: 2 test cases
+- Boundary Values: 2 test cases
+- Performance: 2 test cases
+- Functional: 2 test cases
+- Data Integrity: 1 test case
+- Integration: 1 test case
+
+**Total Test Cases: 20**
+
+=== EXECUTION NOTES ===
+
+1. All test cases require a properly configured SparkSession
+2. Mock data should be created for sales_table to avoid dependencies
+3. Test cases should clean up any created tables/views after execution
+4. Performance test cases should use appropriate dataset sizes
+5. Error handling tests should verify both logging and exception behavior
