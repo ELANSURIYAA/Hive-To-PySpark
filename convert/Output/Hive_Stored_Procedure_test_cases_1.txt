@@ -1,0 +1,238 @@
+# Unit Test Cases for Hive_Stored_Procedure PySpark Code
+# Version: 1
+# Generated for: process_sales_data, validate_date_format, get_sales_statistics functions
+
+## TEST CASE CATEGORY: HAPPY PATH SCENARIOS
+
+### TC001: Valid Date Range Processing
+**Test Case ID:** TC001
+**Test Case Description:** Test process_sales_data function with valid start and end dates
+**Input:** start_date='2023-01-01', end_date='2023-12-31'
+**Expected Outcome:** Function executes successfully, data is filtered correctly, aggregated by product_id, and inserted into both summary_table and detailed_sales_summary tables
+**Test Type:** Happy Path
+
+### TC002: Single Day Date Range
+**Test Case ID:** TC002
+**Test Case Description:** Test process_sales_data function with same start and end date
+**Input:** start_date='2023-06-15', end_date='2023-06-15'
+**Expected Outcome:** Function processes single day data correctly, aggregation works for one day
+**Test Type:** Happy Path
+
+### TC003: Valid Date Format Validation
+**Test Case ID:** TC003
+**Test Case Description:** Test validate_date_format function with correct date format
+**Input:** date_string='2023-01-01'
+**Expected Outcome:** Function returns True
+**Test Type:** Happy Path
+
+### TC004: Get Sales Statistics - Valid Range
+**Test Case ID:** TC004
+**Test Case Description:** Test get_sales_statistics function with valid date range
+**Input:** start_date='2023-01-01', end_date='2023-12-31'
+**Expected Outcome:** Function returns dictionary with total_records, unique_products, and total_sales_amount
+**Test Type:** Happy Path
+
+### TC005: Main Function Execution
+**Test Case ID:** TC005
+**Test Case Description:** Test main function execution with default parameters
+**Input:** No input parameters (uses default dates)
+**Expected Outcome:** Function executes process_sales_data and stops spark session
+**Test Type:** Happy Path
+
+## TEST CASE CATEGORY: EDGE CASES
+
+### TC006: Empty Date Range (Future Dates)
+**Test Case ID:** TC006
+**Test Case Description:** Test process_sales_data with future dates that have no data
+**Input:** start_date='2025-01-01', end_date='2025-12-31'
+**Expected Outcome:** Function handles empty dataset gracefully, creates empty aggregation, logs appropriate messages
+**Test Type:** Edge Case
+
+### TC007: Reverse Date Range
+**Test Case ID:** TC007
+**Test Case Description:** Test process_sales_data with end_date before start_date
+**Input:** start_date='2023-12-31', end_date='2023-01-01'
+**Expected Outcome:** Function handles reverse date range, should return empty result or handle gracefully
+**Test Type:** Edge Case
+
+### TC008: Null/None Date Values
+**Test Case ID:** TC008
+**Test Case Description:** Test process_sales_data with null date parameters
+**Input:** start_date=None, end_date=None
+**Expected Outcome:** Function raises appropriate exception or handles null values gracefully
+**Test Type:** Edge Case
+
+### TC009: Empty String Dates
+**Test Case ID:** TC009
+**Test Case Description:** Test process_sales_data with empty string dates
+**Input:** start_date='', end_date=''
+**Expected Outcome:** Function handles empty strings appropriately, may raise validation error
+**Test Type:** Edge Case
+
+### TC010: Invalid Date Format Validation
+**Test Case ID:** TC010
+**Test Case Description:** Test validate_date_format with invalid date formats
+**Input:** date_string='invalid-date', '2023/01/01', '01-01-2023'
+**Expected Outcome:** Function returns False for all invalid formats
+**Test Type:** Edge Case
+
+### TC011: Leap Year Date Validation
+**Test Case ID:** TC011
+**Test Case Description:** Test validate_date_format with leap year date
+**Input:** date_string='2024-02-29'
+**Expected Outcome:** Function returns True for valid leap year date
+**Test Type:** Edge Case
+
+### TC012: Invalid Leap Year Date
+**Test Case ID:** TC012
+**Test Case Description:** Test validate_date_format with invalid leap year date
+**Input:** date_string='2023-02-29'
+**Expected Outcome:** Function returns False for invalid leap year date
+**Test Type:** Edge Case
+
+### TC013: Empty Sales Table
+**Test Case ID:** TC013
+**Test Case Description:** Test process_sales_data when sales_table is empty
+**Input:** start_date='2023-01-01', end_date='2023-12-31' with empty sales_table
+**Expected Outcome:** Function handles empty table gracefully, creates empty aggregation
+**Test Type:** Edge Case
+
+### TC014: Single Product Data
+**Test Case ID:** TC014
+**Test Case Description:** Test process_sales_data with data for only one product
+**Input:** start_date='2023-01-01', end_date='2023-12-31' with single product data
+**Expected Outcome:** Function processes single product correctly, aggregation works for one product
+**Test Type:** Edge Case
+
+### TC015: Large Date Range
+**Test Case ID:** TC015
+**Test Case Description:** Test process_sales_data with very large date range (multiple years)
+**Input:** start_date='2020-01-01', end_date='2023-12-31'
+**Expected Outcome:** Function handles large dataset efficiently, memory management works correctly
+**Test Type:** Edge Case
+
+## TEST CASE CATEGORY: ERROR HANDLING
+
+### TC016: Non-existent Sales Table
+**Test Case ID:** TC016
+**Test Case Description:** Test process_sales_data when sales_table doesn't exist
+**Input:** start_date='2023-01-01', end_date='2023-12-31' with non-existent table
+**Expected Outcome:** Function raises appropriate exception with proper error message
+**Test Type:** Error Handling
+
+### TC017: Invalid Date Format in Process Function
+**Test Case ID:** TC017
+**Test Case Description:** Test process_sales_data with invalid date format
+**Input:** start_date='invalid-date', end_date='2023-12-31'
+**Expected Outcome:** Function raises appropriate exception or handles invalid format
+**Test Type:** Error Handling
+
+### TC018: Database Connection Error
+**Test Case ID:** TC018
+**Test Case Description:** Test process_sales_data when database connection fails
+**Input:** start_date='2023-01-01', end_date='2023-12-31' with connection failure
+**Expected Outcome:** Function raises appropriate exception with connection error message
+**Test Type:** Error Handling
+
+### TC019: Insufficient Permissions
+**Test Case ID:** TC019
+**Test Case Description:** Test process_sales_data when user lacks table access permissions
+**Input:** start_date='2023-01-01', end_date='2023-12-31' with permission restrictions
+**Expected Outcome:** Function raises appropriate permission exception
+**Test Type:** Error Handling
+
+### TC020: Memory Overflow Scenario
+**Test Case ID:** TC020
+**Test Case Description:** Test process_sales_data with extremely large dataset causing memory issues
+**Input:** start_date='2023-01-01', end_date='2023-12-31' with massive dataset
+**Expected Outcome:** Function handles memory constraints gracefully or raises appropriate exception
+**Test Type:** Error Handling
+
+### TC021: Null Values in Sales Data
+**Test Case ID:** TC021
+**Test Case Description:** Test process_sales_data with null values in sales amount or product_id
+**Input:** start_date='2023-01-01', end_date='2023-12-31' with null values in data
+**Expected Outcome:** Function handles null values appropriately in aggregation
+**Test Type:** Error Handling
+
+### TC022: Invalid Data Types in Sales Table
+**Test Case ID:** TC022
+**Test Case Description:** Test process_sales_data with incorrect data types in sales table
+**Input:** start_date='2023-01-01', end_date='2023-12-31' with string values in sales column
+**Expected Outcome:** Function raises appropriate type conversion exception
+**Test Type:** Error Handling
+
+### TC023: Spark Session Failure
+**Test Case ID:** TC023
+**Test Case Description:** Test functions when Spark session is not available or fails
+**Input:** Various function calls with failed Spark session
+**Expected Outcome:** Functions raise appropriate Spark-related exceptions
+**Test Type:** Error Handling
+
+## TEST CASE CATEGORY: DATA VALIDATION
+
+### TC024: Aggregation Accuracy
+**Test Case ID:** TC024
+**Test Case Description:** Verify that sales aggregation by product_id is mathematically correct
+**Input:** Known dataset with specific sales values per product
+**Expected Outcome:** Aggregated totals match manual calculation
+**Test Type:** Data Validation
+
+### TC025: Date Filter Accuracy
+**Test Case ID:** TC025
+**Test Case Description:** Verify that date filtering includes/excludes correct records
+**Input:** Dataset with dates before, within, and after the specified range
+**Expected Outcome:** Only records within date range are processed
+**Test Type:** Data Validation
+
+### TC026: Duplicate Product Handling
+**Test Case ID:** TC026
+**Test Case Description:** Test aggregation with duplicate product_id entries
+**Input:** Dataset with multiple records for same product_id
+**Expected Outcome:** Sales values are correctly summed for each product
+**Test Type:** Data Validation
+
+### TC027: Statistics Calculation Accuracy
+**Test Case ID:** TC027
+**Test Case Description:** Verify get_sales_statistics calculations are correct
+**Input:** Known dataset with specific counts and totals
+**Expected Outcome:** Statistics match expected values (record count, unique products, total sales)
+**Test Type:** Data Validation
+
+## TEST CASE CATEGORY: PERFORMANCE TESTING
+
+### TC028: Caching Effectiveness
+**Test Case ID:** TC028
+**Test Case Description:** Test that DataFrame caching improves performance for multiple operations
+**Input:** Large dataset processed multiple times
+**Expected Outcome:** Cached operations are faster than non-cached operations
+**Test Type:** Performance
+
+### TC029: Memory Management
+**Test Case ID:** TC029
+**Test Case Description:** Test that unpersist() properly releases cached DataFrame memory
+**Input:** Process data and monitor memory usage before/after unpersist
+**Expected Outcome:** Memory is released after unpersist() call
+**Test Type:** Performance
+
+### TC030: Large Dataset Processing
+**Test Case ID:** TC030
+**Test Case Description:** Test function performance with large datasets
+**Input:** Dataset with millions of records
+**Expected Outcome:** Function completes within acceptable time limits
+**Test Type:** Performance
+
+## SUMMARY
+**Total Test Cases:** 30
+**Happy Path:** 5 test cases
+**Edge Cases:** 10 test cases
+**Error Handling:** 8 test cases
+**Data Validation:** 4 test cases
+**Performance:** 3 test cases
+
+**Coverage Areas:**
+- process_sales_data() function: 20 test cases
+- validate_date_format() function: 5 test cases
+- get_sales_statistics() function: 3 test cases
+- main() function: 1 test case
+- General system behavior: 1 test case
