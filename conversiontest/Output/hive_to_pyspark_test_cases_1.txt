@@ -1,0 +1,511 @@
+# HIVE TO PYSPARK RECONCILIATION TEST CASES - VERSION 1
+# Generated for: Hive_Stored_Procedure.txt to PySpark Conversion
+# Date: 2024
+# Purpose: Automate reconciliation between Hive and PySpark implementations
+
+## CONVERSION ANALYSIS SUMMARY:
+
+### ORIGINAL HIVEQL STORED PROCEDURE:
+```sql
+CREATE PROCEDURE process_sales_data(
+    IN start_date STRING,
+    IN end_date STRING
+)
+BEGIN
+    DECLARE total_sales FLOAT;
+ 
+    SET @dynamic_query = CONCAT(
+        "INSERT INTO summary_table SELECT product_id, SUM(sales) AS total_sales ",
+        "FROM sales_table WHERE sale_date BETWEEN '", start_date, "' AND '", end_date, "' ",
+        "GROUP BY product_id"
+    );
+    EXECUTE IMMEDIATE @dynamic_query;
+ 
+    CREATE TEMPORARY TABLE temp_sales_summary AS
+    SELECT product_id, SUM(sales) AS total_sales
+    FROM sales_table
+    WHERE sale_date BETWEEN start_date AND end_date
+    GROUP BY product_id;
+ 
+    DECLARE cur CURSOR FOR SELECT product_id, total_sales FROM temp_sales_summary;
+ 
+    OPEN cur;
+ 
+    FETCH cur INTO product_id, total_sales;
+    WHILE total_sales IS NOT NULL DO
+        INSERT INTO detailed_sales_summary (product_id, total_sales)
+        VALUES (product_id, total_sales);
+        FETCH cur INTO product_id, total_sales;
+    END WHILE;
+ 
+    CLOSE cur;
+ 
+    DROP TABLE temp_sales_summary;
+END;
+```
+
+### CONVERTED PYSPARK IMPLEMENTATION:
+- Python function with DataFrame operations
+- SparkSession initialization with adaptive query execution
+- DataFrame filtering, groupBy, and aggregation operations
+- Temporary view creation instead of temporary tables
+- collect() operations for cursor-like processing
+- Comprehensive logging and error handling
+
+## CRITICAL SYNTAX/FUNCTION CHANGES DETECTED:
+
+### 1. STORED PROCEDURE TO FUNCTION CONVERSION
+- **Original**: CREATE PROCEDURE process_sales_data(IN start_date STRING, IN end_date STRING)
+- **Converted**: def process_sales_data(start_date, end_date)
+- **Impact**: Paradigm shift from SQL procedure to Python function
+- **Test Required**: Parameter passing and function execution validation
+
+### 2. DYNAMIC SQL TO DATAFRAME OPERATIONS
+- **Original**: SET @dynamic_query = CONCAT(...); EXECUTE IMMEDIATE @dynamic_query;
+- **Converted**: filtered_sales_df.groupBy("product_id").agg(spark_sum("sales").alias("total_sales"))
+- **Impact**: Static DataFrame operations replace dynamic SQL generation
+- **Test Required**: Result equivalence validation between dynamic SQL and DataFrame operations
+
+### 3. TEMPORARY TABLE TO TEMPORARY VIEW
+- **Original**: CREATE TEMPORARY TABLE temp_sales_summary AS SELECT...
+- **Converted**: summary_df.createOrReplaceTempView("temp_sales_summary")
+- **Impact**: Memory-based view instead of physical temporary table
+- **Test Required**: Data accessibility and lifecycle management validation
+
+### 4. CURSOR OPERATIONS TO COLLECT() PROCESSING
+- **Original**: DECLARE cur CURSOR FOR...; OPEN cur; FETCH cur INTO...; WHILE...DO
+- **Converted**: summary_rows = summary_df.collect(); for row in summary_rows:
+- **Impact**: Distributed data collection to driver node for processing
+- **Test Required**: Memory usage and performance impact validation
+
+### 5. AGGREGATE FUNCTION MAPPING
+- **Original**: SUM(sales) AS total_sales
+- **Converted**: spark_sum("sales").alias("total_sales")
+- **Impact**: Function import and namespace change
+- **Test Required**: Aggregation accuracy validation
+
+### 6. DATE FILTERING LOGIC
+- **Original**: WHERE sale_date BETWEEN start_date AND end_date
+- **Converted**: filter((col("sale_date") >= start_date) & (col("sale_date") <= end_date))
+- **Impact**: Operator precedence and null handling differences
+- **Test Required**: Date range filtering accuracy validation
+
+### 7. INSERT OPERATIONS CONVERSION
+- **Original**: INSERT INTO summary_table, INSERT INTO detailed_sales_summary
+- **Converted**: summary_df.write.mode("append").saveAsTable(), detailed_df.write.saveAsTable()
+- **Impact**: Batch write operations instead of row-by-row inserts
+- **Test Required**: Data insertion completeness and mode validation
+
+### 8. RESOURCE CLEANUP CONVERSION
+- **Original**: DROP TABLE temp_sales_summary
+- **Converted**: spark.catalog.dropTempView("temp_sales_summary"), summary_df.unpersist()
+- **Impact**: Memory management and resource cleanup differences
+- **Test Required**: Resource cleanup effectiveness validation
+
+## DATA TYPE MAPPING ANALYSIS:
+
+### 1. STRING TYPE HANDLING
+- **HiveQL**: STRING parameters and columns
+- **PySpark**: StringType() in schema definitions
+- **Compatibility**: Direct mapping, case sensitivity considerations
+
+### 2. FLOAT TYPE HANDLING
+- **HiveQL**: FLOAT for total_sales calculations
+- **PySpark**: FloatType() in schema, potential precision differences
+- **Compatibility**: Precision and rounding behavior validation required
+
+### 3. DATE TYPE HANDLING
+- **HiveQL**: String-based date comparisons
+- **PySpark**: String comparison with potential for DateType conversion
+- **Compatibility**: Date format consistency validation required
+
+## JOIN CONDITIONS ANALYSIS:
+- **Current Implementation**: No explicit joins in either version
+- **Potential Impact**: Future join operations may require broadcast join considerations
+- **Recommendation**: Add test cases for join scenarios if data model expands
+
+## AGGREGATION LOGIC COMPARISON:
+
+### 1. GROUP BY OPERATIONS
+- **HiveQL**: GROUP BY product_id (SQL standard)
+- **PySpark**: groupBy("product_id") (DataFrame API)
+- **Equivalence**: Functionally equivalent, syntax different
+
+### 2. SUM AGGREGATIONS
+- **HiveQL**: SUM(sales) with automatic null handling
+- **PySpark**: spark_sum("sales") with explicit null considerations
+- **Validation Required**: Null value handling consistency
+
+## NULL HANDLING ANALYSIS:
+
+### 1. NULL CHECKS IN LOOPS
+- **HiveQL**: WHILE total_sales IS NOT NULL DO
+- **PySpark**: if total_sales is not None:
+- **Impact**: Python None vs SQL NULL semantics
+- **Test Required**: Null value processing consistency
+
+### 2. NULL AGGREGATION BEHAVIOR
+- **HiveQL**: SUM() returns NULL for empty groups
+- **PySpark**: spark_sum() behavior with empty groups
+- **Test Required**: Empty group aggregation result validation
+
+## CASE SENSITIVITY CONSIDERATIONS:
+
+### 1. COLUMN NAME HANDLING
+- **HiveQL**: Case-insensitive by default
+- **PySpark**: Case-sensitive column references
+- **Impact**: Column name consistency critical
+- **Test Required**: Column reference accuracy validation
+
+### 2. TABLE NAME HANDLING
+- **HiveQL**: Case-insensitive table names
+- **PySpark**: Case-sensitive table/view names
+- **Impact**: Table reference consistency required
+- **Test Required**: Table access validation
+
+## RECOMMENDED MANUAL INTERVENTIONS:
+
+### 1. PERFORMANCE OPTIMIZATIONS
+- **Intervention**: Implement broadcast joins for small lookup tables
+- **Rationale**: Improve join performance in distributed environment
+- **Implementation**: Use broadcast() function for small DataFrames
+
+### 2. MEMORY MANAGEMENT
+- **Intervention**: Replace collect() with DataFrame operations for large datasets
+- **Rationale**: Prevent driver memory issues with large result sets
+- **Implementation**: Use DataFrame write operations instead of collect() + iteration
+
+### 3. ERROR HANDLING ENHANCEMENT
+- **Intervention**: Add comprehensive data validation and error recovery
+- **Rationale**: Improve robustness in production environment
+- **Implementation**: Input validation, schema validation, retry mechanisms
+
+### 4. CONFIGURATION TUNING
+- **Intervention**: Optimize Spark configurations for workload characteristics
+- **Rationale**: Maximize performance based on data size and cluster resources
+- **Implementation**: Dynamic partition coalescing, adaptive query execution tuning
+
+### 5. MONITORING AND LOGGING
+- **Intervention**: Implement comprehensive monitoring and alerting
+- **Rationale**: Enable proactive issue detection and resolution
+- **Implementation**: Metrics collection, log aggregation, performance monitoring
+
+## COMPREHENSIVE RECONCILIATION TEST CASES:
+
+### TC001: Basic Function Execution Reconciliation
+**Test Case ID**: TC001
+**Test Case Description**: Validate that both HiveQL stored procedure and PySpark function execute successfully with identical input parameters
+**Input Data**: Sample sales data with 1000 records, date range 2023-01-01 to 2023-12-31
+**Expected Outcome**: Both implementations complete without errors and produce output tables
+**Validation Method**: Execution status comparison, error log analysis
+**Priority**: Critical
+**Test Type**: Functional Reconciliation
+
+### TC002: Data Filtering Accuracy Reconciliation
+**Test Case ID**: TC002
+**Test Case Description**: Verify that date range filtering produces identical results between HiveQL BETWEEN clause and PySpark filter operations
+**Input Data**: Sales data spanning multiple years with specific date boundaries
+**Expected Outcome**: Identical record counts and data sets after filtering
+**Validation Method**: Row count comparison, data content hash comparison
+**Priority**: Critical
+**Test Type**: Data Accuracy Reconciliation
+
+### TC003: Aggregation Results Reconciliation
+**Test Case ID**: TC003
+**Test Case Description**: Validate that SUM aggregations produce identical results between HiveQL and PySpark implementations
+**Input Data**: Sales data with known aggregation totals per product
+**Expected Outcome**: Identical sum values for each product_id across both implementations
+**Validation Method**: Aggregation result comparison with tolerance for floating-point precision
+**Priority**: Critical
+**Test Type**: Calculation Reconciliation
+
+### TC004: Temporary Table vs Temporary View Reconciliation
+**Test Case ID**: TC004
+**Test Case Description**: Verify that temporary table creation in HiveQL and temporary view creation in PySpark provide equivalent data access
+**Input Data**: Aggregated sales summary data
+**Expected Outcome**: Identical data accessibility and query results from temporary structures
+**Validation Method**: Data retrieval comparison, schema validation
+**Priority**: High
+**Test Type**: Storage Mechanism Reconciliation
+
+### TC005: Cursor vs Collect Processing Reconciliation
+**Test Case ID**: TC005
+**Test Case Description**: Validate that cursor-based row processing in HiveQL and collect()-based processing in PySpark produce identical detailed results
+**Input Data**: Summary data requiring row-by-row processing
+**Expected Outcome**: Identical detailed_sales_summary table contents
+**Validation Method**: Row-by-row comparison, processing order validation
+**Priority**: Critical
+**Test Type**: Processing Logic Reconciliation
+
+### TC006: Insert Operations Reconciliation
+**Test Case ID**: TC006
+**Test Case Description**: Verify that INSERT INTO operations in HiveQL and DataFrame write operations in PySpark produce identical target table contents
+**Input Data**: Processed sales summary and detailed data
+**Expected Outcome**: Identical data in summary_table and detailed_sales_summary across both implementations
+**Validation Method**: Table content comparison, record count validation
+**Priority**: Critical
+**Test Type**: Data Persistence Reconciliation
+
+### TC007: Null Value Handling Reconciliation
+**Test Case ID**: TC007
+**Test Case Description**: Validate that null value processing is consistent between HiveQL IS NULL checks and PySpark None comparisons
+**Input Data**: Sales data containing null values in sales amounts
+**Expected Outcome**: Identical handling of null values in aggregations and processing logic
+**Validation Method**: Null value processing comparison, result validation
+**Priority**: High
+**Test Type**: Data Quality Reconciliation
+
+### TC008: Empty Dataset Handling Reconciliation
+**Test Case ID**: TC008
+**Test Case Description**: Verify that both implementations handle empty input datasets consistently
+**Input Data**: Empty sales_table or date range with no matching records
+**Expected Outcome**: Consistent behavior and appropriate handling of empty result sets
+**Validation Method**: Empty dataset processing comparison, error handling validation
+**Priority**: High
+**Test Type**: Edge Case Reconciliation
+
+### TC009: Large Dataset Performance Reconciliation
+**Test Case ID**: TC009
+**Test Case Description**: Compare performance characteristics between HiveQL and PySpark implementations with large datasets
+**Input Data**: Sales data with 10+ million records
+**Expected Outcome**: PySpark implementation performs within acceptable range of HiveQL performance
+**Validation Method**: Execution time comparison, resource utilization analysis
+**Priority**: Medium
+**Test Type**: Performance Reconciliation
+
+### TC010: Date Boundary Conditions Reconciliation
+**Test Case ID**: TC010
+**Test Case Description**: Validate date filtering behavior at boundary conditions (start/end dates)
+**Input Data**: Sales data with records exactly at start_date and end_date boundaries
+**Expected Outcome**: Identical inclusion/exclusion of boundary records
+**Validation Method**: Boundary record comparison, date logic validation
+**Priority**: High
+**Test Type**: Boundary Condition Reconciliation
+
+### TC011: Concurrent Execution Reconciliation
+**Test Case ID**: TC011
+**Test Case Description**: Verify that both implementations handle concurrent executions appropriately
+**Input Data**: Multiple simultaneous executions with overlapping date ranges
+**Expected Outcome**: Consistent results without data corruption or interference
+**Validation Method**: Concurrent execution testing, result consistency validation
+**Priority**: Medium
+**Test Type**: Concurrency Reconciliation
+
+### TC012: Data Type Precision Reconciliation
+**Test Case ID**: TC012
+**Test Case Description**: Validate that floating-point calculations maintain consistent precision between implementations
+**Input Data**: Sales data with high-precision decimal values
+**Expected Outcome**: Aggregation results within acceptable precision tolerance
+**Validation Method**: Precision comparison with defined tolerance levels
+**Priority**: High
+**Test Type**: Precision Reconciliation
+
+### TC013: Resource Cleanup Reconciliation
+**Test Case ID**: TC013
+**Test Case Description**: Verify that resource cleanup (temporary tables/views) is effective in both implementations
+**Input Data**: Multiple execution cycles with temporary resource creation
+**Expected Outcome**: Proper cleanup without resource leaks or conflicts
+**Validation Method**: Resource monitoring, cleanup verification
+**Priority**: Medium
+**Test Type**: Resource Management Reconciliation
+
+### TC014: Error Handling Reconciliation
+**Test Case ID**: TC014
+**Test Case Description**: Compare error handling behavior between HiveQL and PySpark implementations
+**Input Data**: Invalid input parameters, missing tables, corrupted data
+**Expected Outcome**: Consistent error detection and handling approaches
+**Validation Method**: Error scenario testing, error message comparison
+**Priority**: High
+**Test Type**: Error Handling Reconciliation
+
+### TC015: Schema Evolution Reconciliation
+**Test Case ID**: TC015
+**Test Case Description**: Validate behavior when source table schema changes
+**Input Data**: Sales data with additional or modified columns
+**Expected Outcome**: Consistent schema handling and adaptation
+**Validation Method**: Schema change testing, compatibility validation
+**Priority**: Medium
+**Test Type**: Schema Compatibility Reconciliation
+
+### TC016: Transaction Behavior Reconciliation
+**Test Case ID**: TC016
+**Test Case Description**: Compare transactional behavior and rollback capabilities
+**Input Data**: Processing scenarios with potential failures mid-execution
+**Expected Outcome**: Consistent transaction handling and data integrity
+**Validation Method**: Transaction testing, rollback validation
+**Priority**: High
+**Test Type**: Transaction Reconciliation
+
+### TC017: Memory Usage Reconciliation
+**Test Case ID**: TC017
+**Test Case Description**: Compare memory consumption patterns between implementations
+**Input Data**: Various dataset sizes and processing scenarios
+**Expected Outcome**: PySpark memory usage within acceptable limits compared to HiveQL
+**Validation Method**: Memory profiling, usage pattern analysis
+**Priority**: Medium
+**Test Type**: Memory Usage Reconciliation
+
+### TC018: Partitioning Strategy Reconciliation
+**Test Case ID**: TC018
+**Test Case Description**: Validate that data partitioning strategies produce equivalent results
+**Input Data**: Partitioned sales data by date or product categories
+**Expected Outcome**: Consistent processing across partitions
+**Validation Method**: Partition-wise result comparison
+**Priority**: Medium
+**Test Type**: Partitioning Reconciliation
+
+### TC019: Configuration Sensitivity Reconciliation
+**Test Case ID**: TC019
+**Test Case Description**: Test behavior under different configuration settings
+**Input Data**: Standard sales dataset with various Spark configurations
+**Expected Outcome**: Consistent results regardless of configuration variations
+**Validation Method**: Configuration testing, result stability validation
+**Priority**: Low
+**Test Type**: Configuration Reconciliation
+
+### TC020: End-to-End Data Lineage Reconciliation
+**Test Case ID**: TC020
+**Test Case Description**: Comprehensive validation of complete data processing pipeline
+**Input Data**: Full production-like dataset with complex scenarios
+**Expected Outcome**: Identical end-to-end results between HiveQL and PySpark implementations
+**Validation Method**: Complete pipeline comparison, data lineage validation
+**Priority**: Critical
+**Test Type**: End-to-End Reconciliation
+
+## EDGE CASES AND SPECIAL SCENARIOS:
+
+### EC001: Zero Sales Values
+**Description**: Records with sales = 0.0
+**Expected Behavior**: Included in aggregations, not filtered out
+**Validation**: Verify zero values are processed identically
+
+### EC002: Negative Sales Values
+**Description**: Records with negative sales amounts (returns/refunds)
+**Expected Behavior**: Included in SUM calculations, reducing totals
+**Validation**: Verify negative value handling consistency
+
+### EC003: Duplicate Product Records
+**Description**: Multiple records for same product_id in same date range
+**Expected Behavior**: Proper aggregation across all records
+**Validation**: Verify aggregation accuracy with duplicates
+
+### EC004: Invalid Date Formats
+**Description**: Malformed date strings in sale_date column
+**Expected Behavior**: Consistent error handling or filtering
+**Validation**: Verify date validation consistency
+
+### EC005: Unicode Product IDs
+**Description**: Product IDs containing special characters or Unicode
+**Expected Behavior**: Proper string handling and grouping
+**Validation**: Verify Unicode handling consistency
+
+## PERFORMANCE BENCHMARKS:
+
+### PB001: Small Dataset Performance (< 1GB)
+**Metric**: Execution time comparison
+**Target**: PySpark within 150% of HiveQL execution time
+**Measurement**: Average execution time over 10 runs
+
+### PB002: Medium Dataset Performance (1-10GB)
+**Metric**: Execution time and resource utilization
+**Target**: PySpark performance improvement due to optimization
+**Measurement**: Execution time, CPU, memory usage comparison
+
+### PB003: Large Dataset Performance (> 10GB)
+**Metric**: Scalability and distributed processing efficiency
+**Target**: PySpark shows better scalability characteristics
+**Measurement**: Processing time per GB, cluster resource utilization
+
+### PB004: Memory Efficiency Comparison
+**Metric**: Peak memory usage during processing
+**Target**: PySpark memory usage predictable and manageable
+**Measurement**: Driver and executor memory consumption
+
+### PB005: I/O Performance Comparison
+**Metric**: Data read/write throughput
+**Target**: Comparable I/O performance between implementations
+**Measurement**: Data transfer rates, I/O wait times
+
+## VALIDATION CRITERIA:
+
+### VC001: Data Accuracy Validation
+**Criteria**: 100% accuracy in aggregation results
+**Tolerance**: Floating-point precision within 0.001%
+**Method**: Row-by-row comparison with statistical validation
+
+### VC002: Data Completeness Validation
+**Criteria**: No data loss during conversion process
+**Method**: Record count validation at each processing stage
+**Verification**: Source vs. target record count reconciliation
+
+### VC003: Performance Acceptability Validation
+**Criteria**: PySpark performance within acceptable range
+**Threshold**: Execution time within 200% of HiveQL baseline
+**Method**: Statistical performance analysis over multiple runs
+
+### VC004: Resource Utilization Validation
+**Criteria**: Efficient resource usage without waste
+**Method**: Resource monitoring and utilization analysis
+**Threshold**: Memory usage within cluster capacity limits
+
+### VC005: Error Handling Validation
+**Criteria**: Robust error detection and recovery
+**Method**: Negative testing with various error conditions
+**Verification**: Error consistency and appropriate handling
+
+## RECONCILIATION EXECUTION STRATEGY:
+
+### Phase 1: Syntax and Basic Functionality (TC001-TC006)
+**Duration**: 3-4 days
+**Focus**: Core conversion validation
+**Success Criteria**: All basic operations produce identical results
+
+### Phase 2: Data Quality and Edge Cases (TC007-TC012)
+**Duration**: 2-3 days
+**Focus**: Data handling consistency
+**Success Criteria**: Robust handling of edge cases and data quality issues
+
+### Phase 3: Performance and Scalability (TC013-TC018)
+**Duration**: 3-4 days
+**Focus**: Performance characteristics validation
+**Success Criteria**: Acceptable performance and scalability demonstration
+
+### Phase 4: Integration and Production Readiness (TC019-TC020)
+**Duration**: 2-3 days
+**Focus**: End-to-end validation
+**Success Criteria**: Production-ready implementation validation
+
+## AUTOMATED RECONCILIATION FRAMEWORK:
+
+### Data Generation Module
+- Synthetic data generation for various test scenarios
+- Configurable data volume and complexity
+- Edge case data pattern generation
+
+### Execution Engine
+- Parallel execution of HiveQL and PySpark implementations
+- Result capture and comparison framework
+- Performance metrics collection
+
+### Validation Engine
+- Automated result comparison with configurable tolerance
+- Statistical analysis of performance metrics
+- Comprehensive reporting and alerting
+
+### Reporting Module
+- Detailed reconciliation reports
+- Performance analysis dashboards
+- Trend analysis and historical comparison
+
+## CONCLUSION:
+
+This comprehensive reconciliation test suite ensures thorough validation of the HiveQL to PySpark conversion, covering:
+
+1. **Functional Equivalence**: All business logic produces identical results
+2. **Data Integrity**: No data loss or corruption during processing
+3. **Performance Characteristics**: Acceptable performance within defined thresholds
+4. **Error Handling**: Robust error detection and recovery mechanisms
+5. **Scalability**: Efficient processing of various data volumes
+6. **Resource Management**: Proper resource utilization and cleanup
+
+The test cases are designed to provide confidence in the migration from HiveQL stored procedures to PySpark implementations while maintaining data accuracy, performance, and reliability requirements.
